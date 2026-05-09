@@ -1,5 +1,5 @@
 
 window.APP_CONFIG = {
-  API_BASE_URL: 'https://script.google.com/macros/s/AKfycbwypdzGm0P0XSwt6_J_Z6pfAYf_pOP-SR_NdAPphBJ17j2rxKeS_9wSmHHbWZyIngzmoA/exec'
+  API_BASE_URL: 'https://script.google.com/macros/s/1ZwNnJdnjQ5uRnhbdh6T2RMPeIjvhPdTytcww00sNkM91hyqEKT4Hqa6/exec'
 };
 
