@@ -1,1 +1,1693 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>FoodOrder</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="global-loader"></div>
+<div id="action-lock-overlay" class="action-lock-overlay" aria-live="polite" aria-busy="true">
+  <div class="action-lock-card">
+    <div class="action-lock-icon">⏳</div>
+    <div id="action-lock-title" class="action-lock-title">กำลังประมวลผล...</div>
+    <div class="action-lock-meta"><span id="action-lock-percent">0%</span></div>
+    <div class="action-lock-track"><div id="action-lock-bar" class="action-lock-bar"></div></div>
+    <div class="action-lock-note">กรุณารอสักครู่จนกว่าระบบจะทำรายการเสร็จ</div>
+  </div>
+</div>
+<div id="toast-container"></div>
+<div id="center-popup-overlay" class="center-popup-overlay">
+  <div id="center-popup-card" class="center-popup-card">
+    <div id="center-popup-icon" class="center-popup-icon">ℹ</div>
+    <div id="center-popup-text" class="center-popup-text">ข้อความแจ้งเตือน</div>
+  </div>
+</div>
+<div id="confirm-popup-overlay" class="center-popup-overlay">
+  <div class="center-popup-card confirm-popup-card">
+    <div class="center-popup-icon">❓</div>
+    <div id="confirm-popup-text" class="center-popup-text">ยืนยันการทำรายการ?</div>
+    <div class="confirm-popup-actions">
+      <button id="confirm-popup-cancel" class="btn btn-ghost" type="button">ยกเลิก</button>
+      <button id="confirm-popup-ok" class="btn btn-primary" type="button">ตกลง</button>
+    </div>
+  </div>
+</div>
+<!-- ==================== CUSTOMER ==================== -->
+<div id="customer-app">
+  <div id="customer-closed-overlay" class="shop-closed-overlay hidden">
+    <div class="shop-closed-overlay-card">
+      <div style="font-size:28px;margin-bottom:6px">🚫</div>
+      <div style="font-weight:700;font-size:18px;margin-bottom:4px">ร้านปิด</div>
+      <div id="shop-closed-message" class="text-sm text-muted">ขณะนี้ร้านไม่เปิดให้สั่งอาหาร</div>
+    </div>
+  </div>
+  <!-- MENU -->
+  <div id="page-menu" class="page active">
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div>
+          <div class="topbar-brand">
+            <span class="brand-logo-wrap" id="topbar-brand-logo">🍽</span>
+            <span class="brand-name">FoodOrder</span>
+          </div>
+          <div class="subtitle" id="topbar-subtitle">เลือกเมนูที่ต้องการ</div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center">
+          <button onclick="App.ui.nav('history')" class="btn-icon" title="ประวัติ">📋</button>
+          <button onclick="App.customer.toCart()" class="btn-icon" style="position:relative">
+            🛒<span id="cart-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--primary);color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;align-items:center;justify-content:center">0</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="customer-menu-tabs" id="customer-menu-tabs"></div>
+    <div class="customer-promo-hero hidden" id="customer-promo-hero"></div>
+    <div class="customer-menu-search-wrap">
+      <input id="menu-search" type="text" class="form-input" placeholder="🔍 ค้นหาเมนู..." oninput="App.customer.searchMenu(this.value)">
+    </div>
+    <div id="menu-grid" class="menu-grid"></div>
+    <button class="cart-float" id="cart-float-btn" onclick="App.customer.toCart()">
+      🛒<span class="cart-badge-dot" id="cart-badge-float">0</span>
+    </button>
+  </div>
+
+  <!-- CART -->
+  <div id="page-cart" class="page">
+    <div class="topbar"><div class="topbar-inner"><button class="back-btn" onclick="App.ui.nav('menu')">← กลับ</button><div style="font-weight:700;font-size:17px">ตะกร้า</div><div style="width:40px"></div></div></div>
+    <div class="container p-4">
+      <div id="cart-items"></div>
+      <div id="cart-summary-wrap" class="hidden">
+        <div id="promo-tags" style="display:none;flex-wrap:wrap;gap:6px;margin-top:10px"></div>
+        <div class="cart-summary mt-3">
+          <div class="summary-row"><span>ยอดรวม</span><span id="cart-subtotal">฿0</span></div>
+          <div class="summary-row" style="color:var(--green)"><span>โปรโมชัน</span><span id="cart-discount">-฿0</span></div>
+          <div class="summary-row total"><span>รวมทั้งหมด</span><span id="cart-total">฿0</span></div>
+        </div>
+        <div class="mt-3"><button class="btn btn-primary" onclick="App.customer.toInfo()">ดำเนินการต่อ →</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INFO -->
+  <div id="page-info" class="page">
+    <div class="topbar"><div class="topbar-inner"><button class="back-btn" onclick="App.ui.nav('cart')">← กลับ</button><div style="font-weight:700;font-size:17px">ข้อมูลการสั่ง</div><div style="width:40px"></div></div></div>
+    <div class="container p-4" style="padding-bottom:100px">
+      <div class="form-group"><label class="form-label">ชื่อ-นามสกุล *</label><input id="cust-name" type="text" class="form-input" placeholder="เช่น สมชาย ใจดี" autocomplete="name"></div>
+      <div id="cust-dept-group" class="form-group"><label id="cust-dept-label" class="form-label">หมู่บ้าน *</label><select id="dept-select" class="form-input"><option id="dept-select-placeholder" value="">-- เลือกหมู่บ้าน --</option></select></div>
+      <div id="cust-note-group" class="form-group"><label id="cust-note-label" class="form-label">หมายเหตุ <span class="text-xs text-muted"></span></label><input id="cust-note" type="text" class="form-input" placeholder="รายละเอียดเพิ่มเติม"></div>
+      <div class="form-group"><label id="cust-customer-note-label" class="form-label">หมายเหตุเพิ่มเติม</label><input id="cust-customer-note" type="text" class="form-input" placeholder="เช่น ไม่เผ็ด, โทรก่อนส่ง, แพ้อาหารบางชนิด"></div>
+      <div id="payment-method-wrap" class="form-group hidden">
+        <label class="form-label">วิธีชำระเงิน</label>
+        <div class="pay-tabs" id="payment-method-tabs" style="max-width:none">
+          <button type="button" class="pay-tab active" id="pm-cash" onclick="App.customer.setPaymentMethod('cash')">💵 จ่ายเงินสด /เก็บเงินปลายทาง</button>
+          <button type="button" class="pay-tab" id="pm-scan" onclick="App.customer.setPaymentMethod('scan')">📱 สแกนจ่ายตอนนี้</button>
+        </div>
+      </div>
+      <div class="order-preview card p-4 mt-3">
+        <div class="section-header" style="margin-bottom:10px"><h2 style="font-size:15px">สรุปรายการ</h2></div>
+        <div id="info-cart-preview"></div>
+      </div>
+    </div>
+    <div class="sticky-footer"><button id="to-payment-btn" class="btn btn-primary" onclick="App.customer.toPayment()">ดำเนินการชำระเงิน</button></div>
+  </div>
+
+  <!-- PAYMENT -->
+  <div id="page-payment" class="page">
+    <div class="topbar"><div class="topbar-inner"><div style="width:40px"></div><div style="font-weight:700;font-size:17px">ชำระเงิน</div><div style="width:40px"></div></div></div>
+    <div class="payment-page">
+      <div class="countdown-hint">กรุณาชำระเงินในเวลาที่กำหนด</div>
+      <div class="modern-timer-wrapper">
+        <div class="modern-timer">
+          <div class="timer-box"><span id="countdown-m">15</span><span class="timer-unit">MIN</span></div>
+          <div class="timer-sep">:</div>
+          <div class="timer-box"><span id="countdown-s">00</span><span class="timer-unit">SEC</span></div>
+        </div>
+        <div class="timer-prog-bg"><div id="countdown-prog-bar" class="timer-prog-fill"></div></div>
+      </div>
+      <div class="text-muted text-sm" id="pay-orderId" style="margin-bottom:4px"></div>
+      <div id="pay-customer-info" class="pay-customer-badge hidden"></div>
+      <div class="payment-amount" id="pay-amount">฿0</div>
+
+      <!-- TAB: PromptPay / Bank -->
+      <div class="pay-tabs" id="pay-tabs">
+        <button class="pay-tab active" id="tab-pp" onclick="App.customer.switchPayTab('pp')">📱 พร้อมเพย์</button>
+        <button class="pay-tab" id="tab-bank" onclick="App.customer.switchPayTab('bank')">🏦 บัญชีธนาคาร</button>
+      </div>
+
+      <!-- PromptPay Panel -->
+      <div id="panel-pp">
+        <div class="qr-wrap" id="qr-wrap"><div style="font-size:13px;color:var(--text2)">กำลังโหลด QR...</div></div>
+        <div id="payee-info" style="text-align:center;margin-top:8px;padding:10px 16px;background:#f9f9f9;border-radius:10px;min-width:220px;display:none">
+          <div id="payee-name" style="font-weight:700;font-size:16px;color:var(--text)">-</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">พร้อมเพย์ / PromptPay</div>
+        </div>
+      </div>
+
+      <!-- Bank Panel -->
+      <div id="panel-bank" style="display:none">
+        <div id="bank-slides-wrap" style="width:100%;max-width:360px;margin:0 auto"></div>
+      </div>
+
+      <!-- Slip Upload -->
+      <div id="slip-upload-section" class="mt-3">
+        <p class="text-muted text-sm" style="margin-bottom:8px">อัพโหลดสลิปเพื่อยืนยันการชำระเงิน</p>
+        <div class="slip-upload-area" id="slip-drop-zone" onclick="document.getElementById('slip-file-input').click()">
+          <input type="file" id="slip-file-input" accept="image/*" onchange="App.customer.onSlipSelected(event)">
+          <div id="slip-placeholder"><div style="font-size:32px;margin-bottom:8px">📎</div><div style="font-weight:600;font-size:14px">แตะเพื่ออัพโหลดสลิป</div><div class="text-sm text-muted mt-2">รองรับ JPG, PNG</div></div>
+          <img id="slip-preview" class="slip-preview hidden" alt="สลิป">
+        </div>
+        <div id="slip-status" class="hidden"></div>
+        <div id="slip-verify-wrap" class="hidden mt-3">
+          <button class="btn btn-success" id="slip-verify-btn" onclick="App.customer.verifySlip()">✓ ยืนยันการชำระเงิน</button>
+        </div>
+      </div>
+
+      <div id="payment-steps-wrap" class="payment-steps">
+        <div class="payment-step"><div class="step-icon waiting" id="step-waiting">○</div><span class="text-sm">รอการชำระเงิน...</span></div>
+        <div class="payment-step"><div class="step-icon waiting" id="step-verify">○</div><span class="text-sm">กำลังยืนยัน...</span></div>
+      </div>
+
+      <div class="payment-action-btns" id="cancel-order-wrap">
+        <button class="btn btn-danger" onclick="App.customer.cancelOrder()">✕ ยกเลิกออเดอร์</button>
+      </div>
+      <button id="retry-btn" class="hidden btn btn-ghost mt-3" style="width:100%" onclick="this.classList.add('hidden');App.customer.resetPayUI();App.customer.startCountdown();App.customer.startWebhookCheck()">ลองใหม่</button>
+    </div>
+  </div>
+
+  <!-- RECEIPT -->
+  <div id="page-receipt" class="page">
+    <div class="topbar"><div class="topbar-inner"><button class="back-btn" onclick="App.ui.nav('menu')">← กลับ</button><div style="font-weight:700;font-size:17px">ใบเสร็จ</div><div style="width:40px"></div></div></div>
+    <div class="container p-4" style="padding-bottom:100px">
+      <div class="success-icon">✓</div>
+      <h2 id="receipt-page-title" style="font-weight:700;font-size:20px;text-align:center">ชำระเงินสำเร็จ!</h2>
+      <p id="receipt-page-subtitle" class="text-muted text-sm mt-2" style="text-align:center">ขอบคุณ! คำสั่งซื้อได้รับการยืนยันแล้ว</p>
+      <div id="receipt-wrap"></div>
+    </div>
+    <div class="sticky-footer"><button class="btn btn-primary" onclick="App.ui.nav('menu')">สั่งอาหารต่อ</button></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div id="page-history" class="page">
+    <div class="topbar"><div class="topbar-inner"><button class="back-btn" onclick="App.ui.nav('menu')">← กลับ</button><div style="font-weight:700;font-size:17px">ประวัติสั่งอาหาร</div><div style="width:40px"></div></div></div>
+    <div class="container p-4"><div id="history-list"></div></div>
+  </div>
+
+  <!-- ITEM MODAL -->
+  <div id="item-modal" class="modal-overlay" onclick="if(event.target===this)App.customer.closeModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <div><div class="modal-title" id="modal-title"></div><div class="modal-price" id="modal-price"></div></div>
+        <button class="btn-icon" onclick="App.customer.closeModal()">✕</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+      <div style="position:sticky;bottom:0;background:#fff;padding:12px 16px;border-top:1px solid var(--border)">
+        <button class="btn btn-primary" onclick="App.customer.addToCart()">+ เพิ่มลงตะกร้า</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ADMIN ==================== -->
+<div id="admin-app" style="display:none">
+  <!-- LOGIN -->
+  <div id="admin-login" class="login-wrap">
+    <div class="login-box">
+      <div class="login-logo"><span class="icon">🍽</span><h1>FoodOrder Admin</h1><p>ระบบจัดการร้านอาหาร</p></div>
+      <div class="form-group"><label class="form-label">ชื่อผู้ใช้</label><input id="admin-user" type="text" class="form-input" placeholder="username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('admin-pass').focus()"></div>
+      <div class="form-group"><label class="form-label">รหัสผ่าน</label><input id="admin-pass" type="password" class="form-input" placeholder="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')App.admin.login()"></div>
+      <button id="login-btn" class="btn btn-primary" onclick="App.admin.login()">เข้าสู่ระบบ</button>
+      <p class="text-xs text-muted mt-3" style="text-align:center">กรุณาใช้บัญชีผู้ดูแลที่ระบบกำหนดให้</p>
+    </div>
+  </div>
+
+  <!-- MAIN PANEL -->
+  <div id="admin-main" class="admin-layout hidden">
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="App.admin.closeSidebar()"></div>
+    <div class="sidebar" id="admin-sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon" id="admin-sidebar-logo">🍽</div>
+        <h2 id="admin-sidebar-brand-name">FoodOrder</h2>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" data-page="orders" onclick="App.ui.adminNav('orders')"><span class="icon">📦</span>ออเดอร์</div>
+        <div class="nav-item" data-page="menu" onclick="App.ui.adminNav('menu')"><span class="icon">🍱</span>จัดการเมนู</div>
+        <div class="nav-item" data-page="topics" onclick="App.ui.adminNav('topics')"><span class="icon">🏷</span>ตัวเลือก</div>
+        <div class="nav-item" data-page="promotions" onclick="App.ui.adminNav('promotions')"><span class="icon">🎉</span>โปรโมชัน</div>
+        <div class="nav-item" data-page="printing" onclick="App.ui.adminNav('printing')"><span class="icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v5"/><path d="M6 17h12"/><path d="M8 21h8"/><path d="M6 12h12v5a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/></svg></span>พิมพ์ใบเสร็จ/สติ๊กเกอร์</div>
+        <div class="nav-item" data-page="notifications" onclick="App.ui.adminNav('notifications')"><span class="icon">🔔</span>แจ้งเตือน</div>
+        <div class="nav-item" data-page="settings" onclick="App.ui.adminNav('settings')"><span class="icon">⚙️</span>ตั้งค่า</div>
+      </nav>
+      <div class="sidebar-footer"><button class="btn btn-ghost w-full" onclick="App.admin.logout()" style="font-size:13px">ออกจากระบบ</button></div>
+    </div>
+
+    <div class="main-content">
+      <div class="admin-topbar">
+        <div class="admin-topbar-left">
+          <button class="hamburger" onclick="App.admin.openSidebar()">☰</button>
+          <h2 id="admin-page-title">ออเดอร์</h2>
+        </div>
+        <div class="admin-topbar-right">
+          <button class="btn btn-secondary admin-mode-toggle" type="button" onclick="App.admin.toggleAdminMode()">🌙 Dark</button>
+          <div class="admin-profile-chip">
+            <div class="admin-profile-avatar">A</div>
+            <div class="admin-profile-meta">
+              <div class="admin-profile-name">User</div>
+              <div class="admin-profile-role" id="admin-date">Guest</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MENU -->
+      <div id="apg-menu" class="admin-page p-4">
+        <div class="section-header"><h2>จัดการเมนู</h2><button data-admin-only="true" class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="App.admin.openMenuEdit(null)">+ เพิ่มเมนู</button></div>
+        <div class="admin-menu-filterbar">
+          <input id="admin-menu-search" type="text" class="form-input" placeholder="🔍 ค้นหาเมนูหรือหมวดหมู่..." oninput="App.admin.setMenuSearch(this.value)">
+          <div class="customer-menu-tabs" id="admin-menu-tabs"></div>
+          <div class="pagination-info-bar" id="admin-menu-page-info">ยังไม่มีเมนู</div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th style="width:150px">ลำดับ</th><th>รูป</th><th>ชื่อ</th><th>ราคา</th><th>สต๊อก</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="menu-table"></tbody></table></div>
+        <div class="load-more-wrap"><button id="admin-menu-loadmore" class="btn btn-secondary load-more-btn" type="button" onclick="App.admin.loadMoreMenu()" style="display:none">โหลดเพิ่ม</button></div>
+      </div>
+
+      <!-- TOPICS -->
+      <div id="apg-topics" class="admin-page p-4">
+        <div class="section-header"><h2>หัวข้อตัวเลือก</h2><button data-admin-only="true" class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="App.admin.openTopicEdit(null)">+ เพิ่มหัวข้อ</button></div>
+        <div id="topics-list"></div>
+      </div>
+
+
+
+      <!-- PROMOTIONS -->
+      <div id="apg-promotions" class="admin-page p-4">
+        <div class="section-header"><h2>โปรโมชัน</h2><button data-admin-only="true" class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="App.admin.openPromoEdit(null)">+ เพิ่มโปรโมชัน</button></div>
+        <div class="table-wrap"><table><thead><tr><th>ประเภท</th><th>เงื่อนไข</th><th>ส่วนลด</th><th>รายละเอียด</th><th>จัดการ</th></tr></thead><tbody id="promo-table"></tbody></table></div>
+      </div>
+
+      <!-- PRINTING -->
+      <div id="apg-printing" class="admin-page p-4">
+        <div class="printdash-head">
+          <div>
+            <h2>พิมพ์ใบเสร็จ/สติ๊กเกอร์</h2>
+            <p class="text-sm text-muted">จัดการพิมพ์ใบเสร็จและสติ๊กเกอร์ผ่านระบบคิว</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="printdash-btn printdash-btn-secondary" type="button" onclick="App.admin.refreshPrintingData()">รีเฟรช</button>
+          </div>
+        </div>
+        <div class="printdash-tabs">
+          <button type="button" id="printdash-tab-receipt" class="printdash-tab active" onclick="App.admin.switchPrintingTab('receipt')">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10v18l-2-1-2 1-2-1-2 1-2-1z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>
+            พิมพ์ใบเสร็จ
+          </button>
+          <button type="button" id="printdash-tab-sticker" class="printdash-tab" onclick="App.admin.switchPrintingTab('sticker')">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v5"/><path d="M6 17h12"/><path d="M8 21h8"/><path d="M6 12h12v5a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/></svg>
+            พิมพ์สติ๊กเกอร์
+          </button>
+        </div>
+        <div id="printing-panel-sticker" class="printdash-panel">
+          <div class="printdash-grid">
+            <section class="printdash-center">
+              <div class="printdash-card printdash-filter">
+                <input id="printing-search-sticker" type="text" class="printdash-input" placeholder="ค้นหาเลขออเดอร์ / ชื่อลูกค้า" oninput="App.admin.onPrintingSearch('sticker',this.value)">
+                <select id="printing-status-sticker" class="printdash-select" onchange="App.admin.renderPrintingOrders('sticker')"><option value="all">สถานะทั้งหมด</option><option value="printed">พิมพ์แล้ว</option><option value="unprinted">ยังไม่พิมพ์</option></select>
+                <select id="printing-payment-sticker" class="printdash-select" onchange="App.admin.renderPrintingOrders('sticker')"><option value="all">การชำระเงิน: ทั้งหมด</option><option value="scan">การชำระเงิน: สแกนจ่าย</option><option value="cash">การชำระเงิน: เก็บเงินปลายทาง</option></select>
+                <button class="printdash-btn printdash-btn-primary" type="button" onclick="App.admin.loadPrintingOrders({force:true})">รีเฟรชรายการ</button>
+              </div>
+              <div class="printdash-card printdash-table-wrap">
+                <div class="printdash-actionbar">
+                  <label><input type="checkbox" id="printing-select-all-sticker" onchange="App.admin.togglePrintSelectAll('sticker',this.checked)"> เลือกทั้งหมด</label>
+                  <div style="display:flex;gap:8px">
+                    <button class="printdash-btn printdash-btn-primary printdash-btn-print" type="button" onclick="App.admin.directPrintSelection('sticker')">พิมพ์</button>
+                    <button class="printdash-btn printdash-btn-secondary" type="button" onclick="App.admin.downloadPrintingSelectionPdf('sticker')">พิมพ์ PDF</button>
+                    <button class="printdash-btn printdash-btn-secondary" type="button" onclick="App.admin.resetPrintingStatus('sticker')">ล้างสถานะพิมพ์แล้ว</button>
+                  </div>
+                </div>
+                <table class="printdash-table"><thead><tr><th style="width:40px"></th><th>เลขออเดอร์</th><th>เวลา</th><th>ลูกค้า</th><th>หมู่บ้าน/แผนก</th><th>ยอดรวม</th><th>สถานะพิมพ์</th></tr></thead><tbody id="printing-orders-sticker"></tbody></table>
+                <div id="printing-orders-cards-sticker" class="printdash-orders-cards"></div>
+                <div id="printing-pager-sticker" class="printdash-pager"></div>
+              </div>
+            </section>
+            <aside class="printdash-right">
+              <div class="printdash-card">
+                <h4>ตั้งค่าการพิมพ์ (ระบบเดิม)</h4>
+                <div class="form-group"><label class="form-label">Print Method</label><select id="printing-method-sticker" class="printdash-select" onchange="App.admin.printing.saveSettings()"><option value="browser">browser</option></select></div>
+                <div id="printing-legacy-settings-sticker"></div>
+              </div>
+              <div class="printdash-card">
+                <h4>ตัวอย่างพรีวิว (ระบบเดิม)</h4>
+                <div class="printdash-preview" id="printing-legacy-preview-sticker"></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <div id="printing-panel-receipt" class="printdash-panel active">
+          <div class="printdash-grid">
+            <section class="printdash-center">
+              <div class="printdash-card printdash-filter">
+                <input id="printing-search-receipt" type="text" class="printdash-input" placeholder="ค้นหาเลขออเดอร์ / ชื่อลูกค้า" oninput="App.admin.onPrintingSearch('receipt',this.value)">
+                <select id="printing-status-receipt" class="printdash-select" onchange="App.admin.renderPrintingOrders('receipt')"><option value="all">สถานะทั้งหมด</option><option value="printed">พิมพ์แล้ว</option><option value="unprinted">ยังไม่พิมพ์</option></select>
+                <select id="printing-payment-receipt" class="printdash-select" onchange="App.admin.renderPrintingOrders('receipt')"><option value="all">การชำระเงิน: ทั้งหมด</option><option value="scan">การชำระเงิน: สแกนจ่าย</option><option value="cash">การชำระเงิน: เก็บเงินปลายทาง</option></select>
+                <button class="printdash-btn printdash-btn-primary" type="button" onclick="App.admin.loadPrintingOrders({force:true})">รีเฟรชรายการ</button>
+              </div>
+              <div class="printdash-card printdash-table-wrap">
+                <div class="printdash-actionbar">
+                  <label><input type="checkbox" id="printing-select-all-receipt" onchange="App.admin.togglePrintSelectAll('receipt',this.checked)"> เลือกทั้งหมด</label>
+                  <div style="display:flex;gap:8px">
+                    <button class="printdash-btn printdash-btn-primary printdash-btn-print" type="button" onclick="App.admin.directPrintSelection('receipt')">พิมพ์</button>
+                    <button class="printdash-btn printdash-btn-secondary" type="button" onclick="App.admin.downloadPrintingSelectionPdf('receipt')">พิมพ์ PDF</button>
+                    <button class="printdash-btn printdash-btn-secondary" type="button" onclick="App.admin.resetPrintingStatus('receipt')">ล้างสถานะพิมพ์แล้ว</button>
+                  </div>
+                </div>
+                <table class="printdash-table"><thead><tr><th style="width:40px"></th><th>เลขออเดอร์</th><th>เวลา</th><th>ลูกค้า</th><th>หมู่บ้าน/แผนก</th><th>ยอดรวม</th><th>สถานะพิมพ์</th></tr></thead><tbody id="printing-orders-receipt"></tbody></table>
+                <div id="printing-orders-cards-receipt" class="printdash-orders-cards"></div>
+                <div id="printing-pager-receipt" class="printdash-pager"></div>
+              </div>
+            </section>
+            <aside class="printdash-right">
+              <div class="printdash-card">
+                <h4>ตั้งค่าการพิมพ์ (ระบบเดิม)</h4>
+                <div class="form-group"><label class="form-label">Print Method</label><select id="printing-method-receipt" class="printdash-select" onchange="App.admin.printing.saveSettings()"><option value="browser">browser</option></select></div>
+                <div id="printing-legacy-settings-receipt"></div>
+              </div>
+              <div class="printdash-card">
+                <h4>ตัวอย่างพรีวิว (ระบบเดิม)</h4>
+                <div class="printdash-preview" id="printing-legacy-preview-receipt"></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div id="apg-notifications" class="admin-page p-4">
+        <div class="section-header"><h2>🔔 ระบบแจ้งเตือนออเดอร์</h2></div>
+        <p class="text-sm text-muted" style="margin:4px 0 14px">เปิดใช้งานช่องทางแจ้งเตือนเมื่อมีออเดอร์ใหม่เข้าระบบ</p>
+        <div class="notify-grid">
+          <div class="card p-4 notify-card">
+            <div class="notify-card-head">
+              <div class="notify-title-row">
+                <h3 style="font-weight:700;font-size:15px">LINE Official Account</h3>
+                <span id="line-status-badge" class="notify-status-badge">Disabled</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="n-line-enabled" onchange="App.admin.toggleNotificationChannel('line')">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div id="n-line-fields" class="notify-fields">
+              <div class="form-group">
+                <label class="form-label">Channel Access Token</label>
+                <div class="notify-secret-wrap">
+                  <input id="n-line-token" type="password" class="form-input" placeholder="ใส่ Channel Access Token" oninput="App.admin.updateNotificationStatusBadges()">
+                  <button class="btn btn-ghost notify-secret-btn" type="button" onclick="App.admin.toggleSecretField('n-line-token',this)">แสดง</button>
+                </div>
+                <div class="text-xs text-muted">Channel Access Token คือกุญแจสำหรับให้ระบบส่งข้อความผ่าน LINE Messaging API</div>
+                <div class="text-xs" style="margin-top:4px;color:#b91c1c">Token เป็นข้อมูลลับ ห้ามแชร์ให้ผู้อื่น</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Target Type</label>
+                <select id="n-line-target-type" class="form-input" onchange="App.admin.updateNotificationStatusBadges()">
+                  <option value="user">user</option>
+                  <option value="group">group</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Target ID</label>
+                <input id="n-line-target-id" type="text" class="form-input" placeholder="User ID หรือ Group ID" oninput="App.admin.updateNotificationStatusBadges()">
+                <div class="text-xs text-muted">User ID มักขึ้นต้นด้วย U / Group ID มักขึ้นต้นด้วย C</div>
+                <div class="notify-actions" style="margin-top:8px">
+                  <button id="btn-fetch-line-group-id" class="btn btn-secondary" type="button" onclick="App.admin.fetchLatestLineGroupId()">ดึง Group ID ล่าสุด</button>
+                </div>
+                <div class="text-xs text-muted" style="margin-top:6px">เพิ่ม LINE OA เข้ากลุ่ม แล้วพิมพ์ข้อความ 1 ครั้ง จากนั้นกดปุ่มนี้</div>
+              </div>
+              <div class="notify-actions">
+                <button id="btn-test-line-notify" class="btn btn-secondary" type="button" onclick="App.admin.testLineNotification()">ทดสอบส่ง LINE</button>
+                <button class="btn btn-secondary" type="button" onclick="App.admin.openLineSetupGuide()">LINE Setup Guide</button>
+              </div>
+              <div id="line-test-status" class="text-sm text-muted" style="margin-top:8px"></div>
+              <div id="line-help-panel" class="notify-help hidden">
+                <div class="text-sm" style="font-weight:700;margin-bottom:6px">วิธีตั้งค่าแบบย่อ</div>
+                <ol class="notify-help-list">
+                  <li>สร้าง LINE Official Account</li>
+                  <li>เข้า LINE Developers Console</li>
+                  <li>สร้าง Provider</li>
+                  <li>สร้าง Messaging API Channel</li>
+                  <li>ไปที่ Messaging API settings</li>
+                  <li>กด Issue Channel Access Token</li>
+                  <li>Copy Channel Access Token มาใส่ในระบบ</li>
+                  <li>เพิ่ม LINE OA เข้ากลุ่มร้าน/กลุ่มครัว</li>
+                  <li>หา Group ID จาก webhook หรือ log event</li>
+                  <li>Copy Group ID มาใส่ใน Target ID</li>
+                </ol>
+                <div class="text-xs text-muted" style="margin-top:8px;color:#b91c1c">ห้ามเผยแพร่ Token ให้คนอื่น</div>
+              </div>
+            </div>
+          </div>
+          <div class="card p-4 notify-card">
+            <div class="notify-card-head">
+              <div class="notify-title-row">
+                <h3 style="font-weight:700;font-size:15px">Telegram Bot</h3>
+                <span id="telegram-status-badge" class="notify-status-badge">Disabled</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="n-telegram-enabled" onchange="App.admin.toggleNotificationChannel('telegram')">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div id="n-telegram-fields" class="notify-fields">
+              <div class="form-group">
+                <label class="form-label">Bot Token</label>
+                <div class="notify-secret-wrap">
+                  <input id="n-telegram-token" type="password" class="form-input" placeholder="ใส่ Telegram Bot Token" oninput="App.admin.updateNotificationStatusBadges()">
+                  <button class="btn btn-ghost notify-secret-btn" type="button" onclick="App.admin.toggleSecretField('n-telegram-token',this)">แสดง</button>
+                </div>
+                <div class="text-xs" style="margin-top:4px;color:#b91c1c">Token เป็นข้อมูลลับ ห้ามแชร์ให้ผู้อื่น</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Chat ID</label>
+                <input id="n-telegram-chat-id" type="text" class="form-input" placeholder="เช่น -1001234567890" oninput="App.admin.updateNotificationStatusBadges()">
+              </div>
+              <div class="notify-actions">
+                <button id="btn-test-telegram-notify" class="btn btn-secondary" type="button" onclick="App.admin.testTelegramNotification()">ทดสอบส่ง Telegram</button>
+                <button class="btn btn-ghost" type="button" onclick="App.admin.toggleHelp('telegram')">วิธีตั้งค่า</button>
+              </div>
+              <div id="telegram-test-status" class="text-sm text-muted" style="margin-top:8px"></div>
+              <div id="telegram-help-panel" class="notify-help hidden">
+                <div class="text-sm" style="font-weight:700;margin-bottom:6px">วิธีหา Telegram Bot Token และ Chat ID</div>
+                <ol class="notify-help-list">
+                  <li>เปิด Telegram</li>
+                  <li>ค้นหา @BotFather</li>
+                  <li>พิมพ์ /newbot</li>
+                  <li>ตั้งชื่อบอท</li>
+                  <li>ตั้ง username ที่ลงท้ายด้วย bot</li>
+                  <li>Copy Bot Token มาใส่ระบบ</li>
+                  <li>เพิ่มบอทเข้ากลุ่มร้าน/กลุ่มครัว</li>
+                  <li>ส่งข้อความอะไรก็ได้ในกลุ่ม</li>
+                  <li>เปิด URL: https://api.telegram.org/botYOUR_BOT_TOKEN/getUpdates</li>
+                  <li>หา chat.id</li>
+                  <li>Copy chat.id มาใส่ระบบ</li>
+                  <li>ถ้าเป็นกลุ่ม chat_id มักเป็นเลขติดลบ เช่น -100xxxxxxxxxx</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="notify-footer-actions">
+          <button id="save-notification-btn" class="btn btn-primary" style="width:auto;min-width:190px" onclick="App.admin.saveNotificationSettings()">บันทึกการตั้งค่าแจ้งเตือน</button>
+        </div>
+        <div class="text-xs text-muted" style="margin-top:8px">ลิงก์จะเปิดหน้าแอดมินออเดอร์ (ถ้ามี URL ระบบ)</div>
+        <div class="text-xs text-muted" style="margin-top:4px">ระบบจะพยายามส่งซ้ำอัตโนมัติหากล้มเหลว</div>
+      </div>
+
+      <!-- SETTINGS (tabbed) -->
+      <div id="apg-settings" class="admin-page p-4">
+        <div class="section-header"><h2>ตั้งค่าระบบ</h2></div>
+        <div style="max-width:640px">
+          <!-- TABS -->
+          <div class="settings-tabs">
+            <button class="stab active" onclick="App.admin.switchSettingsTab(this,'stab-store')">🏪 ร้าน</button>
+            <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-order-info')">🧾 ข้อมูลผู้สั่ง</button>
+            <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-payment')">💳 ชำระเงิน</button>
+            <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-shop-hours')">🕐 เวลาเปิด-ปิด</button>
+            <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-users')">👤 ผู้ใช้งาน</button>
+            <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-api')">🔐 API</button>
+            <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-logs')">📝 Logs</button>
+          </div>
+
+          <!-- TAB: ร้าน -->
+          <div id="stab-store" class="stab-panel active">
+            <div class="card p-4 mb-3">
+              <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">🏪 ข้อมูลร้าน</h3>
+              <div class="form-group"><label class="form-label">ชื่อร้าน (แสดงหน้าลูกค้า)</label><input id="s-name" type="text" class="form-input" placeholder="FoodOrder" oninput="App.admin._updateBrandPreview(this.value)"></div>
+              <div class="form-group">
+                <label class="form-label">โลโก้ร้าน <span class="text-xs text-muted">เว้นว่าง = ใช้อิโมจิ</span></label>
+                <div class="img-src-tabs">
+                  <button type="button" class="img-src-tab active" id="sl-tab-url" onclick="App.admin.switchStoreLogoTab('url')">🔗 URL</button>
+                  <button type="button" class="img-src-tab" id="sl-tab-file" onclick="App.admin.switchStoreLogoTab('file')">📁 อัพโหลด</button>
+                </div>
+                <div id="sl-panel-url">
+                  <input id="s-logo" type="url" class="form-input" placeholder="https://...logo.png" oninput="App.admin.previewStoreLogoUrl(this.value)">
+                </div>
+                <div id="sl-panel-file" style="display:none">
+                  <input type="file" id="s-logo-file" accept="image/*" style="display:none" onchange="App.admin.onStoreLogoFileSelected(event)">
+                  <button type="button" class="btn btn-secondary" style="width:100%" onclick="document.getElementById('s-logo-file').click()">📷 เลือกโลโก้จากมือถือ / คอม</button>
+                </div>
+                <div id="sl-preview-final" style="display:none;margin-top:10px;text-align:center">
+                  <img id="sl-preview-img" style="width:120px;height:120px;border-radius:var(--radius-sm);object-fit:contain;background:#fff;border:1px solid var(--border)">
+                  <div class="text-xs text-muted" style="margin-top:4px">ตัวอย่างโลโก้ (1:1)</div>
+                  <div style="display:flex;gap:6px;justify-content:center;margin-top:6px">
+                    <button type="button" class="btn btn-secondary" style="padding:4px 12px;font-size:12px;width:auto" onclick="App.admin.openStoreLogoCrop()">✂️ ครอบรูป</button>
+                    <button type="button" class="btn btn-ghost" style="padding:4px 12px;font-size:12px;width:auto" onclick="App.admin.clearStoreLogo()">✕ ลบรูป</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB: ข้อมูลการสั่ง -->
+          <div id="stab-order-info" class="stab-panel">
+            <div class="card p-4 mb-3">
+              <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">🧾 ข้อมูลผู้สั่ง</h3>
+              <div class="form-group">
+                <label class="form-label">หมวดหมู่จัดส่ง</label>
+                <select id="s-delivery-type-select" class="form-input" onchange="App.admin.switchDeliveryType(this.value)">
+                  <option value="company">บริษัท</option>
+                  <option value="village">หมู่บ้าน</option>
+                </select>
+                <input type="hidden" id="s-delivery-type" value="village">
+              </div>
+              <div id="s-depts-group" class="form-group">
+                <label id="s-depts-label" class="form-label">รายการหมู่บ้าน (คั่นด้วย , )</label>
+                <input id="s-depts" type="text" class="form-input" placeholder="เช่น หมู่บ้าน A, หมู่บ้าน B, หมู่บ้าน C">
+                <p class="text-xs text-muted" style="margin-top:6px">จะแสดงเป็นตัวเลือกในหน้าข้อมูลการสั่งของลูกค้า</p>
+              </div>
+              <div class="form-group">
+            <p class="text-xs text-muted" style="margin-top:2px">ระบบจะตั้งข้อความช่องอัตโนมัติ: เลือก “บริษัท” = รายละเอียดการสั่ง, เลือก “หมู่บ้าน” = ที่อยู่จัดส่ง</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB: ชำระเงิน -->
+          <div id="stab-payment" class="stab-panel">
+            <div class="card p-4" style="margin-bottom:14px">
+              <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">📱 พร้อมเพย์ / PromptPay</h3>
+              <div class="shop-status-toggle" style="margin-top:0;margin-bottom:12px">
+                <span class="shop-status-label">เปิดใช้งาน PromptPay</span>
+                <label class="toggle-switch"><input type="checkbox" id="s-promptpay-enabled"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="form-group"><label class="form-label">เลข PromptPay (มือถือ / บัตรประชาชน)</label><input id="s-pp" type="text" class="form-input" placeholder="0812345678" inputmode="numeric" autocomplete="off" spellcheck="false"></div>
+              <div class="form-group"><label class="form-label">ชื่อบัญชี (แสดงใต้ QR)</label><input id="s-payee" type="text" class="form-input" placeholder="ชื่อ-นามสกุล"></div>
+              <div class="form-group"><label class="form-label">Payment Timeout</label><select id="s-timeout" class="form-input"><option value="900">15 นาที</option><option value="1800">30 นาที</option><option value="0">ไม่จำกัดเวลา</option></select></div>
+              <div class="shop-status-toggle" style="margin-top:8px">
+                <span class="shop-status-label">เปิดใช้งานการจ่ายเงินสด/เก็บเงินปลายทาง</span>
+                <label class="toggle-switch"><input type="checkbox" id="s-cash-enabled"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="shop-status-toggle" style="margin-top:8px">
+                <span class="shop-status-label">เปิดใช้งานบัญชีธนาคาร</span>
+                <label class="toggle-switch"><input type="checkbox" id="s-bank-enabled"><span class="toggle-slider"></span></label>
+              </div>
+            </div>
+            <div class="card p-4" style="margin-bottom:14px">
+              <div class="section-header" style="margin-bottom:12px"><h3 style="font-weight:700;font-size:15px">🏦 บัญชีธนาคาร</h3><button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.addBankSlide()">+ เพิ่มบัญชี</button></div>
+              <div id="bank-list-admin"></div>
+            </div>
+          </div>
+
+          <!-- TAB: เวลาเปิด-ปิด -->
+          <div id="stab-shop-hours" class="stab-panel">
+            <div class="card p-4" style="margin-bottom:14px">
+              <div class="shop-status-toggle" style="margin-bottom:16px">
+                <span class="shop-status-label" id="shop-status-text">สถานะร้านปัจจุบัน</span>
+                <label class="toggle-switch"><input type="checkbox" id="shop-open-toggle" checked onchange="App.admin.onShopToggleChanged(this.checked)"><span class="toggle-slider"></span></label>
+              </div>
+              <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">📅 ช่วงเวลาเปิดร้าน</h3>
+              <div class="form-group">
+                <label class="form-label">วันเวลาเริ่มเปิด</label>
+                <input id="s-open-start" type="datetime-local" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">วันเวลาสิ้นสุดการเปิด</label>
+                <input id="s-open-end" type="datetime-local" class="form-input">
+              </div>
+              <p class="text-xs text-muted">ถ้าเว้นว่างทั้งสองช่อง จะใช้แค่สวิตช์เปิด/ปิดร้าน</p>
+            </div>
+          </div>
+
+          <!-- TAB: ผู้ใช้งาน -->
+          <div id="stab-users" class="stab-panel">
+            <div class="card p-4" style="margin-bottom:14px">
+              <div class="section-header"><h3 style="font-weight:700;font-size:15px">👤 จัดการผู้ใช้งาน</h3><button id="add-user-btn" data-admin-only="true" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.openUserEdit(null)">+ เพิ่มผู้ใช้งาน</button></div>
+              <div class="table-wrap"><table><thead><tr><th>Username</th><th>Role</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="users-table"></tbody></table></div>
+            </div>
+          </div>
+
+          <!-- TAB: API -->
+          <div id="stab-api" class="stab-panel">
+            <div class="card p-4" style="margin-bottom:14px">
+              <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">🔐 SlipOK API</h3>
+              <div class="form-group"><label class="form-label">API Key</label><input id="s-slipok" type="text" class="form-input" placeholder="SLIPOK..."></div>
+              <div class="form-group"><label class="form-label">Branch ID</label><input id="s-branch" type="text" class="form-input" placeholder="Branch ID"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <button id="btn-test-slipok" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.testSlipOKConnection()">ตรวจสอบ SlipOK API</button>
+                <span id="api-slipok-status" class="text-sm text-muted">ยังไม่ได้ตรวจสอบ</span>
+              </div>
+              <div class="text-xs text-muted" style="margin-top:8px;line-height:1.5">
+                หมายเหตุ: Error 1003 = Package หมดอายุ, Error 1004 = โควต้าหมด
+              </div>
+            </div>
+            <div class="card p-4" style="margin-bottom:14px">
+              <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">📁 Google Drive</h3>
+              <div class="form-group"><label class="form-label">Folder ID (เก็บรูปเมนู)</label><input id="s-drive" type="text" class="form-input" placeholder="วาง Folder ID หรือลิงก์โฟลเดอร์ Google Drive ได้"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <button id="btn-test-drive" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.testGoogleDriveConnection()">ตรวจสอบ Google Drive</button>
+                <span id="api-drive-status" class="text-sm text-muted">ยังไม่ได้ตรวจสอบ</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="stab-logs" class="stab-panel">
+            <div class="card p-4" style="margin-bottom:14px">
+              <div class="section-header" style="margin-bottom:10px">
+                <h3 style="font-weight:700;font-size:15px">📝 Activity Logs</h3>
+                <button class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.loadActivityLogs()">รีเฟรช</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>รายละเอียด</th></tr></thead>
+                  <tbody id="activity-log-table"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <button id="save-settings-btn" class="btn btn-primary" style="margin-top:8px" onclick="App.admin.saveSettings()">บันทึกการตั้งค่า</button>
+        </div>
+      </div>
+
+      <!-- ORDERS -->
+      <div id="apg-orders" class="admin-page p-4">
+        <div class="section-header">
+          <h2>📦 ออเดอร์</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+<button class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" id="orders-refresh-btn" onclick="App.admin.refreshOrdersManual()">🔄 รีเฟรช</button>
+            <button data-admin-only="true" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.generateTestOrders()">🧪 สร้างออเดอร์ทดสอบ</button>
+            <button data-admin-only="true" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.clearAllOrders()">🗑 ล้างข้อมูลลูกค้าทั้งหมด</button>
+          </div>
+        </div>
+
+        <!-- Dashboard Summary -->
+        <div id="orders-summary" class="hidden" style="margin-bottom:14px">
+          <div id="orders-new-dashboard" class="orders-new-dashboard hidden">
+            <div class="orders-new-head">
+              <div class="orders-new-title">🆕 ออเดอร์ใหม่</div>
+              <button data-admin-only="true" id="orders-new-accept-all" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.acceptAllNewOrders()">✅ รับทั้งหมด</button>
+            </div>
+            <div id="orders-new-list"></div>
+          </div>
+          <div class="orders-hero-grid">
+            <div id="orders-kpi-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+            <div class="orders-sales-card">
+              <div class="orders-sales-head">
+                <div class="orders-sales-title">แนวโน้มยอดขาย 7 วัน</div>
+                <div class="orders-sales-chip">7 วัน</div>
+              </div>
+              <div id="orders-sales-chart"></div>
+            </div>
+          </div>
+          <!-- Menu ranking -->
+          <div class="orders-rank-card" id="orders-rank-wrap">
+            <div class="orders-rank-title">🏆 อันดับเมนูยอดนิยม</div>
+            <div id="orders-rank-list"></div>
+          </div>
+        </div>
+
+        <!-- Filter: หมวดหมู่ -->
+        <div class="filter-row" id="orders-filter-row">
+          <button class="filter-chip active" data-filter="all" onclick="App.admin.filterOrders('all',this)">ทั้งหมด</button>
+          <button class="filter-chip" data-filter="อาหาร" onclick="App.admin.filterOrders('อาหาร',this)">🍛 อาหาร</button>
+          <button class="filter-chip" data-filter="เครื่องดื่ม" onclick="App.admin.filterOrders('เครื่องดื่ม',this)">🥤 เครื่องดื่ม</button>
+        </div>
+
+        <!-- Filter: ช่วงเวลา -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--text2);font-weight:600;white-space:nowrap">📅 ช่วงเวลา:</span>
+          <div class="filter-row" id="orders-date-row" style="margin-bottom:0;flex:1;min-width:0">
+            <button class="filter-chip" data-daterange="1" onclick="App.admin.filterDateRange('1',this)">วันนี้</button>
+            <button class="filter-chip" data-daterange="7" onclick="App.admin.filterDateRange('7',this)">7 วัน</button>
+            <button class="filter-chip" data-daterange="30" onclick="App.admin.filterDateRange('30',this)">30 วัน</button>
+            <button class="filter-chip active" data-daterange="all" onclick="App.admin.filterDateRange('all',this)">ทั้งหมด</button>
+          </div>
+        </div>
+        <div class="calendar-range-panel" id="orders-calendar-panel">
+          <div class="calendar-range-head">🗓 เลือกจากปฏิทิน</div>
+          <div class="calendar-range-row">
+            <input id="orders-date-from" type="text" class="form-input calendar-range-input" placeholder="เริ่มวันที่" readonly onclick="App.admin.openDatePickerPopup('orders','from')">
+            <span class="calendar-range-sep">ถึง</span>
+            <input id="orders-date-to" type="text" class="form-input calendar-range-input" placeholder="สิ้นสุดวันที่" readonly onclick="App.admin.openDatePickerPopup('orders','to')">
+            <button class="btn btn-secondary calendar-range-btn" onclick="App.admin.openDatePickerPopup('orders','from')">เลือกวันที่</button>
+            <button class="btn btn-secondary calendar-range-btn" onclick="App.admin.applyOrdersDateRange()">ใช้งาน</button>
+            <button class="btn btn-ghost calendar-range-btn" onclick="App.admin.clearOrdersDateRange()">ล้าง</button>
+          </div>
+        </div>
+
+        <!-- Filter: หมวดหมู่จัดส่ง (dynamic) -->
+        <div id="orders-dept-filter-wrap" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+          <span id="orders-dept-filter-label" style="font-size:12px;color:var(--text2);font-weight:600;white-space:nowrap">🏢 หมู่บ้าน:</span>
+          <div class="filter-row" id="orders-dept-row" style="margin-bottom:0;flex:1;min-width:0">
+            <button class="filter-chip active" data-dept="all" onclick="App.admin.filterDept('all',this)">ทั้งหมด</button>
+          </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px;white-space:nowrap" onclick="App.admin.exportOrdersPdf()">📄 Export PDF</button>
+            <button class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px;white-space:nowrap" onclick="App.admin.openBatchPrintModal()">🖨 พิมพ์ทั้งหมด</button>
+          </div>
+        </div>
+        <div class="orders-search-action-row">
+          <div class="orders-search-wrap orders-search-main">
+            <span class="orders-search-icon">🔍</span>
+            <input type="text" id="orders-search-input" class="orders-search-input" placeholder="ค้นหาชื่อลูกค้า หรือ เลขออเดอร์..." oninput="App.admin.onOrderSearch(this.value)" autocomplete="off">
+            <button id="orders-search-clear" class="orders-search-clear hidden" onclick="App.admin.clearOrderSearch()">✕</button>
+          </div>
+          <button data-admin-only="true" class="btn btn-secondary btn-accept-all-large" id="accept-all-new-btn" onclick="App.admin.acceptAllNewOrders()">✅ รับออเดอร์ทั้งหมด</button>
+        </div>
+
+
+        <!-- Auto-refresh indicator -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px;color:var(--text2);flex-wrap:wrap">
+          <span id="orders-last-update"></span>
+          <span id="orders-auto-badge" class="hidden" style="background:var(--green-bg);color:var(--green);border-radius:20px;padding:2px 10px;font-weight:600">● อัปเดตอัตโนมัติ</span>
+        </div>
+
+        <!-- State messages -->
+        <div id="orders-loading" class="empty-state hidden">
+          <div class="orders-skeleton-wrap">
+            <div class="orders-skeleton-row"></div>
+            <div class="orders-skeleton-row"></div>
+            <div class="orders-skeleton-row"></div>
+          </div>
+          <h3 style="margin-top:8px">กำลังโหลด...</h3>
+        </div>
+        <div id="orders-error" class="empty-state hidden">
+          <div class="icon">⚠️</div><h3 id="orders-error-msg">โหลดไม่สำเร็จ</h3>
+<button class="btn btn-primary" style="width:auto;padding:10px 20px;margin-top:12px" onclick="App.admin.refreshOrdersManual()">ลองใหม่</button>
+        </div>
+        <div id="orders-empty" class="empty-state hidden"><div class="icon">📦</div><h3>ยังไม่มีออเดอร์</h3></div>
+
+        <!-- Cards -->
+        <div id="orders-cards"></div>
+        <!-- Pagination -->
+        <div id="orders-pagination" class="hidden" style="margin-top:16px"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MENU MODAL -->
+  <div id="menu-modal" class="admin-modal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="admin-modal-box" onclick="event.stopPropagation()">
+      <div class="admin-modal-header"><h3 id="menu-modal-title">เพิ่มเมนู</h3><button class="btn-icon" onclick="document.getElementById('menu-modal').classList.remove('active')">✕</button></div>
+      <div class="admin-modal-body">
+        <input type="hidden" id="mf-id">
+        <div class="form-group"><label class="form-label">ชื่อเมนู *</label><input id="mf-name" type="text" class="form-input"></div>
+        <div class="form-group"><label class="form-label">ราคา (฿) *</label><input id="mf-price" type="number" min="1" class="form-input"></div>
+        <div class="form-group"><label class="form-label">จำนวนสต๊อก <span class="text-xs text-muted">(เว้นว่าง = ไม่จำกัด)</span></label><input id="mf-stock" type="number" min="0" class="form-input" placeholder="เช่น 20"></div>
+        <div class="form-group"><label class="form-label">หมวดหมู่</label><input id="mf-category" list="mf-category-list" type="text" class="form-input" placeholder="อาหาร, เครื่องดื่ม..."><datalist id="mf-category-list"></datalist></div>
+        <!-- IMAGE SECTION -->
+        <div class="form-group">
+          <label class="form-label">รูปภาพ</label>
+          <!-- Tab switcher -->
+          <div class="img-src-tabs">
+            <button type="button" class="img-src-tab active" id="img-tab-url" onclick="App.admin.switchImgTab('url')">🔗 URL</button>
+            <button type="button" class="img-src-tab" id="img-tab-file" onclick="App.admin.switchImgTab('file')">📁 อัพโหลด</button>
+          </div>
+          <!-- URL panel -->
+          <div id="img-panel-url">
+            <input id="mf-image" type="url" class="form-input" placeholder="https://..." oninput="App.admin.previewImgUrl(this.value)">
+          </div>
+          <!-- File panel -->
+          <div id="img-panel-file" style="display:none">
+            <input type="file" id="mf-image-file" accept="image/*" style="display:none" onchange="App.admin.onImgFileSelected(event)">
+            <button type="button" class="btn btn-secondary" style="width:100%" onclick="document.getElementById('mf-image-file').click()">📷 เลือกรูปจากมือถือ / คอม</button>
+          </div>
+          <!-- Preview + crop trigger -->
+          <div id="img-preview-final" style="display:none;margin-top:10px;text-align:center">
+            <img id="img-preview-img" style="width:120px;height:120px;border-radius:var(--radius-sm);object-fit:cover;border:1px solid var(--border)">
+            <div class="text-xs text-muted" style="margin-top:4px">ตัวอย่างรูปภาพ (1:1)</div>
+            <div style="display:flex;gap:6px;justify-content:center;margin-top:6px">
+              <button type="button" class="btn btn-secondary" style="padding:4px 12px;font-size:12px;width:auto" id="btn-open-crop" onclick="App.admin.openCrop()">✂️ ครอบรูป</button>
+              <button type="button" class="btn btn-ghost" style="padding:4px 12px;font-size:12px;width:auto" onclick="App.admin.clearMenuImg()">✕ ลบรูป</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">หัวข้อตัวเลือก <span class="text-xs text-muted">(เลือกได้หลายรายการ)</span></label>
+          <div id="mf-topics-list" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px;background:var(--surface)">
+            <p class="text-sm text-muted" style="padding:4px 0">กำลังโหลด...</p>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">สถานะ</label><select id="mf-status" class="form-input"><option value="active">เปิดขาย</option><option value="inactive">ปิดขาย</option></select></div>
+      </div>
+      <div class="admin-modal-footer"><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('menu-modal').classList.remove('active')">ยกเลิก</button><button id="save-menu-btn" class="btn btn-primary" style="flex:2" onclick="App.admin.saveMenu()">บันทึก</button></div>
+    </div>
+  </div>
+
+  <!-- TOPIC MODAL -->
+  <div id="topic-modal" class="admin-modal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="admin-modal-box" onclick="event.stopPropagation()">
+      <div class="admin-modal-header"><h3 id="topic-modal-title">เพิ่มหัวข้อตัวเลือก</h3><button class="btn-icon" onclick="document.getElementById('topic-modal').classList.remove('active')">✕</button></div>
+      <div class="admin-modal-body">
+        <input type="hidden" id="tf-id">
+        <div class="form-group"><label class="form-label">ชื่อหัวข้อ *</label><input id="tf-name" type="text" class="form-input"></div>
+        <input type="hidden" id="tf-menu-id" value="*">
+        <div class="form-group"><label class="form-label">ประเภทการเลือก</label><select id="tf-type" class="form-input"><option value="single">เลือกได้อย่างเดียว</option><option value="multi">เลือกได้หลายอย่าง</option></select></div>
+        <div class="form-group"><label class="form-label">บังคับเลือก</label><select id="tf-required" class="form-input"><option value="false">ไม่บังคับ</option><option value="true">บังคับ</option></select></div>
+        <div class="form-group"><label class="form-label">จำนวนสต๊อกหัวข้อ <span class="text-xs text-muted">(เว้นว่าง = ไม่จำกัด)</span></label><input id="tf-stock" type="number" min="0" class="form-input" placeholder="เช่น 10"></div>
+        <div class="form-group">
+          <label class="form-label">ตัวเลือก <span class="text-xs text-muted">(ระบุราคาเพิ่มเติมได้ หรือเว้นว่างไว้)</span></label>
+          <div id="tf-choices-list" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px"></div>
+          <div class="choices-input-row">
+            <input type="text" id="tf-choice-input" placeholder="ชื่อตัวเลือก" style="flex:2" onkeydown="if(event.key==='Enter'){event.preventDefault();App.admin.addTopicChoice();}">
+            <input type="number" id="tf-choice-price" placeholder="ราคา (+฿)" min="0" style="flex:1;max-width:100px" onkeydown="if(event.key==='Enter'){event.preventDefault();App.admin.addTopicChoice();}">
+            <button onclick="App.admin.addTopicChoice()">+ เพิ่ม</button>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">สถานะ</label><select id="tf-status" class="form-input"><option value="active">เปิดใช้</option><option value="inactive">ปิดใช้</option></select></div>
+      </div>
+      <div class="admin-modal-footer"><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('topic-modal').classList.remove('active')">ยกเลิก</button><button id="save-topic-btn" class="btn btn-primary" style="flex:2" onclick="App.admin.saveTopic()">บันทึก</button></div>
+    </div>
+  </div>
+
+  <!-- PROMO MODAL -->
+  <div id="promo-modal" class="admin-modal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="admin-modal-box" onclick="event.stopPropagation()">
+      <div class="admin-modal-header"><h3>โปรโมชัน</h3><button class="btn-icon" onclick="document.getElementById('promo-modal').classList.remove('active')">✕</button></div>
+      <div class="admin-modal-body">
+        <input type="hidden" id="pf-id">
+        <div class="form-group"><label class="form-label">ประเภท</label><select id="pf-type" class="form-input"><option value="qty">จำนวนรายการ</option><option value="spend">ยอดใช้จ่าย</option></select></div>
+        <div class="form-group"><label class="form-label">เงื่อนไข</label><input id="pf-threshold" type="number" min="1" class="form-input"></div>
+        <div class="form-group"><label class="form-label">ส่วนลด (บาท)</label><input id="pf-discount" type="number" min="1" class="form-input"></div>
+        <div class="form-group"><label class="form-label">คำอธิบาย</label><input id="pf-desc" type="text" class="form-input"></div>
+        <div class="form-group"><label class="form-label">สถานะ</label><select id="pf-status" class="form-input"><option value="active">เปิดใช้</option><option value="inactive">ปิดใช้</option></select></div>
+      </div>
+      <div class="admin-modal-footer"><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('promo-modal').classList.remove('active')">ยกเลิก</button><button id="save-promo-btn" class="btn btn-primary" style="flex:2" onclick="App.admin.savePromo()">บันทึก</button></div>
+    </div>
+  </div>
+
+  <!-- USER MODAL -->
+  <div id="user-modal" class="admin-modal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="admin-modal-box" onclick="event.stopPropagation()">
+      <div class="admin-modal-header"><h3>แก้ไขผู้ใช้</h3><button class="btn-icon" onclick="document.getElementById('user-modal').classList.remove('active')">✕</button></div>
+      <div class="admin-modal-body">
+        <input type="hidden" id="uf-id">
+        <input type="hidden" id="uf-original-username">
+        <div class="form-group"><label class="form-label">Username</label><input id="uf-username" type="text" class="form-input"></div>
+        <div class="form-group"><label class="form-label">รหัสผ่านใหม่</label><input id="uf-newpass" type="password" class="form-input" placeholder="••••••••"></div>
+        <div class="form-group"><label class="form-label">Role</label><select id="uf-role" class="form-input"><option value="admin">admin</option><option value="staff">staff</option><option value="guest">guest</option></select></div>
+      </div>
+      <div class="admin-modal-footer"><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('user-modal').classList.remove('active')">ยกเลิก</button><button id="save-user-btn" class="btn btn-primary" style="flex:2" onclick="App.admin.saveUser()">บันทึก</button></div>
+    </div>
+  </div>
+
+  <!-- EXPORT PDF MODAL -->
+  <div id="export-pdf-modal" class="admin-modal" onclick="if(event.target===this)App.admin.closeExportPdfModal()">
+    <div class="admin-modal-box" onclick="event.stopPropagation()" style="max-width:460px">
+      <div class="admin-modal-header"><h3 id="export-pdf-title">📄 เลือกหมู่บ้านสำหรับ Export PDF</h3><button class="btn-icon" onclick="App.admin.closeExportPdfModal()">✕</button></div>
+      <div class="admin-modal-body">
+        <label class="topic-sel-row" style="margin-bottom:10px">
+          <input id="epd-all" type="checkbox" checked onchange="App.admin.toggleExportAllDepts(this.checked)" style="accent-color:var(--primary);width:16px;height:16px;flex-shrink:0;margin-top:2px">
+          <div><div id="epd-all-label" style="font-weight:700;font-size:14px">ทุกหมู่บ้าน</div><div class="text-xs text-muted">เลือกทั้งหมดในครั้งเดียว</div></div>
+        </label>
+        <div id="export-pdf-dept-list" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px;background:var(--surface)"></div>
+      </div>
+      <div class="admin-modal-footer">
+        <button class="btn btn-ghost" style="flex:1" onclick="App.admin.closeExportPdfModal()">ยกเลิก</button>
+        <button class="btn btn-primary" style="flex:2" onclick="App.admin.confirmExportPdf()">Export PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEST ORDERS MODAL -->
+  <div id="test-orders-modal" class="admin-modal" onclick="if(event.target===this)App.admin.closeTestOrdersModal()">
+    <div class="admin-modal-box" onclick="event.stopPropagation()" style="max-width:420px">
+      <div class="admin-modal-header">
+        <h3>🧪 ทดสอบระบบออเดอร์</h3>
+        <button class="btn-icon" onclick="App.admin.closeTestOrdersModal()">✕</button>
+      </div>
+      <div class="admin-modal-body">
+        <div class="form-group">
+          <label class="form-label">โหมดทดสอบ</label>
+          <select id="to-mode" class="form-input" onchange="App.admin.onTestModeChanged()">
+            <option value="normal">ปกติ (30 ออเดอร์)</option>
+            <option value="heavy">หนัก (90 ออเดอร์)</option>
+            <option value="stress">เร่งโหลด (150 ออเดอร์)</option>
+            <option value="custom">กำหนดเอง</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">จำนวนออเดอร์ที่ต้องการสร้าง</label>
+          <input id="to-count" type="number" min="1" max="1000" step="1" class="form-input" value="30" placeholder="เช่น 200 หรือ 300">
+        </div>
+        <div class="form-group">
+          <label class="form-label">ข้อมูลการจำลอง</label>
+          <select id="to-simulate-mode" class="form-input">
+            <option value="auto">อัตโนมัติ (ตามการตั้งค่าข้อมูลผู้สั่ง)</option>
+            <option value="company">บริษัท</option>
+            <option value="village">หมู่บ้าน</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="print-toggle-label" style="font-size:14px">
+            <input type="checkbox" id="to-clear-first">
+            <span>ล้างข้อมูลออเดอร์ทั้งหมดก่อนเริ่มทดสอบ</span>
+          </label>
+        </div>
+        <div id="to-progress-wrap" class="hidden" style="margin-top:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span id="to-progress-text" class="text-sm">กำลังเริ่มทดสอบ...</span>
+            <span id="to-progress-percent" class="text-sm font-bold">0%</span>
+          </div>
+          <div style="height:10px;background:rgba(148,163,184,.2);border-radius:999px;overflow:hidden">
+            <div id="to-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#ef4444,#b91c1c);transition:width .2s ease"></div>
+          </div>
+        </div>
+        <p class="text-xs text-muted">ระบบจะเรียกปุ่มสร้างออเดอร์ทดสอบอัตโนมัติเป็นรอบ และสรุปผลหลังทดสอบเสร็จ</p>
+      </div>
+      <div class="admin-modal-footer">
+        <button class="btn btn-ghost" style="flex:1" onclick="App.admin.closeTestOrdersModal()">ยกเลิก</button>
+        <button id="run-test-orders-btn" class="btn btn-primary" style="flex:2" onclick="App.admin.runTestOrders()">เริ่มทดสอบ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BATCH PRINT MODAL -->
+  <div id="batch-print-modal" class="admin-modal">
+    <div class="admin-modal-box print-modal-box" onclick="event.stopPropagation()" style="max-width:720px;width:96vw">
+      <div class="admin-modal-header">
+        <h3>🖨 พิมพ์ทั้งหมด</h3>
+        <button class="btn-icon" onclick="App.admin.closeBatchPrintModal()">✕</button>
+      </div>
+      <div class="admin-modal-body" style="padding:0">
+        <!-- Tabs -->
+        <div class="print-tabs">
+          <button class="print-tab active" id="bptab-receipt" onclick="App.admin.switchBatchTab('receipt',this)">🧾 ใบเสร็จ</button>
+          <button class="print-tab" id="bptab-sticker" onclick="App.admin.switchBatchTab('sticker',this)">🏷 สติ๊กเกอร์</button>
+        </div>
+        <div class="print-layout">
+          <!-- LEFT -->
+          <div class="print-settings-panel" style="width:240px">
+            <div id="batch-dept-section">
+              <div id="batch-dept-title" class="print-section-title">🏢 เลือกหมู่บ้าน</div>
+              <div id="batch-dept-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px">
+                <!-- generated by JS -->
+              </div>
+              <div class="print-field-separator"></div>
+            </div>
+            <div class="print-section-title" style="margin-top:10px">📅 ช่วงเวลา</div>
+            <select id="bp-daterange" class="form-input" style="font-size:13px;margin-bottom:10px" onchange="App.admin.updateBatchPreview()">
+              <option value="1">วันนี้</option>
+              <option value="7">7 วัน</option>
+              <option value="30">30 วัน</option>
+              <option value="all">ทั้งหมด</option>
+            </select>
+            <div class="calendar-range-row print-calendar-row" style="margin-bottom:10px">
+              <input id="bp-date-from" type="text" class="form-input calendar-range-input" placeholder="เริ่มวันที่" readonly onclick="App.admin.openDatePickerPopup('batch','from')">
+              <span class="calendar-range-sep">ถึง</span>
+              <input id="bp-date-to" type="text" class="form-input calendar-range-input" placeholder="สิ้นสุดวันที่" readonly onclick="App.admin.openDatePickerPopup('batch','to')">
+              <button class="btn btn-secondary calendar-range-btn" onclick="App.admin.openDatePickerPopup('batch','from')">เลือกวันที่</button>
+              <button class="btn btn-ghost calendar-range-btn" onclick="App.admin.clearBatchDateCalendar()">ล้าง</button>
+            </div>
+
+            <div class="print-section-title" style="margin-top:2px">🖨 สถานะการพิมพ์</div>
+            <select id="bp-print-status" class="form-input" style="font-size:13px;margin-bottom:10px" onchange="App.admin.updateBatchPreview()">
+              <option value="unprinted">ออเดอร์ใหม่ (ยังไม่เคยพิมพ์)</option>
+              <option value="printed">ออเดอร์เก่า (พิมพ์ไปแล้ว)</option>
+              <option value="all" selected>ออเดอร์ทั้งหมด</option>
+            </select>
+            <select id="bp-payment-filter" class="form-input" style="font-size:13px;margin-bottom:10px" onchange="App.admin.updateBatchPreview()">
+              <option value="all" selected>การชำระเงิน: ทั้งหมด</option>
+              <option value="scan">การชำระเงิน: สแกนจ่าย</option>
+              <option value="cash">การชำระเงิน: เก็บเงินปลายทาง</option>
+            </select>
+
+            <div class="print-field-separator"></div>
+            <div class="print-section-title" style="margin-top:10px">⚙️ ตั้งค่า</div>
+
+            <!-- Receipt batch settings -->
+            <div id="batch-receipt-settings">
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-payment" checked onchange="App.admin.updateBatchPreview()"><span>วิธีชำระเงิน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-shop-name" checked onchange="App.admin.updateBatchPreview()"><span>ชื่อร้าน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-order-id" checked onchange="App.admin.updateBatchPreview()"><span>หมายเลขออเดอร์</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-datetime" checked onchange="App.admin.updateBatchPreview()"><span>วันที่/เวลา</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-customer" checked onchange="App.admin.updateBatchPreview()"><span>ชื่อลูกค้า</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-dept-field" checked onchange="App.admin.updateBatchPreview()"><span id="bp-dept-label">หมู่บ้าน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-items" checked onchange="App.admin.updateBatchPreview()"><span>รายการอาหาร</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-total" checked onchange="App.admin.updateBatchPreview()"><span>ยอดรวม</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-address" checked onchange="App.admin.updateBatchPreview()"><span id="bp-address-label">ที่อยู่จัดส่ง</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-thankyou" checked onchange="App.admin.updateBatchPreview()"><span>ข้อความขอบคุณ</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bp-qr" checked onchange="App.admin.updateBatchPreview()"><span>QR สแกนจ่ายท้ายบิล (COD)</span></label></div>
+              <div class="print-field-row" style="margin-top:6px">
+                <input type="text" id="bp-thankyou-text" class="form-input" style="font-size:12px" value="ขอบคุณที่ใช้บริการ 🙏" oninput="App.admin.updateBatchPreview()">
+              </div>
+              <div class="print-field-row" style="margin-top:6px">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ความกว้างใบเสร็จ</label>
+                <select id="bp-paper" class="form-input" style="font-size:13px" onchange="App.admin.onPaperSelectChanged('bp-paper','batch')"></select>
+              </div>
+              <div class="print-field-row" style="display:none">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">แนวกระดาษ</label>
+                <select id="bp-orientation" class="form-input" style="font-size:12px" onchange="App.admin.onOrientationChanged('bp-orientation','batch')">
+                  <option value="portrait">แนวตั้ง</option>
+                  <option value="landscape">แนวนอน</option>
+                </select>
+              </div>
+              <div class="print-field-row">
+                <div style="display:flex;gap:6px">
+                  <input type="text" id="bp-paper-preset-input" class="form-input" style="font-size:12px" placeholder="เพิ่มความกว้าง เช่น 72mm">
+                  <button class="btn btn-secondary" style="width:auto;padding:8px 10px;font-size:12px" onclick="App.admin.savePaperPreset('receipt','batch')">บันทึก</button>
+                  <button class="btn btn-ghost" style="width:auto;padding:8px 10px;font-size:12px" onclick="App.admin.deletePaperPreset('receipt','batch')">ลบ</button>
+                </div>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ชดเชยเครื่องพิมพ์ใบเสร็จ Scale (%)</label>
+                <input type="number" id="bp-r-scale" class="form-input" style="font-size:12px" min="80" max="120" step="0.1" value="100" oninput="App.admin.updateBatchPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ขนาดข้อความ (%)</label>
+                <input type="number" id="bp-text-scale" class="form-input" style="font-size:12px" min="70" max="160" step="1" value="100" oninput="App.admin.updateBatchPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ระยะห่างบรรทัด (%)</label>
+                <input type="number" id="bp-line-height" class="form-input" style="font-size:12px" min="70" max="170" step="1" value="100" oninput="App.admin.updateBatchPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ชดเชยใบเสร็จ X/Y (mm)</label>
+                <div style="display:flex;gap:6px">
+                  <input type="number" id="bp-r-offset-x" class="form-input" style="font-size:12px" step="0.1" value="0" oninput="App.admin.updateBatchPreview()" placeholder="X">
+                  <input type="number" id="bp-r-offset-y" class="form-input" style="font-size:12px" step="0.1" value="0" oninput="App.admin.updateBatchPreview()" placeholder="Y">
+                </div>
+              </div>
+            </div>
+
+            <!-- Sticker batch settings -->
+            <div id="batch-sticker-settings" style="display:none">
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bs-payment" checked onchange="App.admin.updateBatchPreview()"><span>วิธีชำระเงิน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bs-shop-name" checked onchange="App.admin.updateBatchPreview()"><span>ชื่อร้าน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bs-order-id" checked onchange="App.admin.updateBatchPreview()"><span>หมายเลขออเดอร์</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bs-customer" checked onchange="App.admin.updateBatchPreview()"><span>ชื่อลูกค้า</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bs-dept-field" checked onchange="App.admin.updateBatchPreview()"><span id="bs-dept-label">หมู่บ้าน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bs-items" checked onchange="App.admin.updateBatchPreview()"><span>รายการอาหาร</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bs-total" onchange="App.admin.updateBatchPreview()"><span>ยอดรวม</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="bs-address" checked onchange="App.admin.updateBatchPreview()"><span id="bs-address-label">ที่อยู่จัดส่ง</span></label></div>
+              <div class="print-field-row" style="margin-top:6px">
+                <select id="bs-size" class="form-input" style="font-size:13px" onchange="App.admin.onPaperSelectChanged('bs-size','batch')"></select>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">แนวกระดาษ</label>
+                <select id="bs-orientation" class="form-input" style="font-size:12px" onchange="App.admin.onOrientationChanged('bs-orientation','batch')">
+                  <option value="portrait">แนวตั้ง</option>
+                  <option value="landscape">แนวนอน</option>
+                </select>
+              </div>
+              <div class="print-field-row">
+                <div style="display:flex;gap:6px">
+                  <input type="text" id="bs-size-preset-input" class="form-input" style="font-size:12px" placeholder="เพิ่มขนาด เช่น 60x30 หรือ 40*30">
+                  <button class="btn btn-secondary" style="width:auto;padding:8px 10px;font-size:12px" onclick="App.admin.savePaperPreset('sticker','batch')">บันทึก</button>
+                  <button class="btn btn-ghost" style="width:auto;padding:8px 10px;font-size:12px" onclick="App.admin.deletePaperPreset('sticker','batch')">ลบ</button>
+                </div>
+              </div>
+              <div class="print-field-row" style="margin-top:6px">
+                <select id="bs-style" class="form-input" style="font-size:13px" onchange="App.admin.updateBatchPreview()">
+                  <option value="bold">Bold</option>
+                  <option value="minimal">Minimal</option>
+                </select>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ชดเชยเครื่องพิมพ์ Scale (%)</label>
+                <input type="number" id="bs-scale" class="form-input" style="font-size:12px" min="80" max="120" step="0.1" value="100" oninput="App.admin.updateBatchPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ขนาดข้อความ (%)</label>
+                <input type="number" id="bs-text-scale" class="form-input" style="font-size:12px" min="70" max="160" step="1" value="100" oninput="App.admin.updateBatchPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ระยะห่างบรรทัด (%)</label>
+                <input type="number" id="bs-line-height" class="form-input" style="font-size:12px" min="70" max="170" step="1" value="100" oninput="App.admin.updateBatchPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ชดเชย X/Y (mm)</label>
+                <div style="display:flex;gap:6px">
+                  <input type="number" id="bs-offset-x" class="form-input" style="font-size:12px" step="0.1" value="0" oninput="App.admin.updateBatchPreview()" placeholder="X">
+                  <input type="number" id="bs-offset-y" class="form-input" style="font-size:12px" step="0.1" value="0" oninput="App.admin.updateBatchPreview()" placeholder="Y">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: Preview -->
+          <div class="print-preview-panel">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div class="print-section-title" style="margin-bottom:0">👁 ตัวอย่าง</div>
+              <div id="batch-count-badge" style="font-size:12px;font-weight:700;color:var(--primary);background:var(--primary-light);padding:3px 10px;border-radius:20px">0 ออเดอร์</div>
+            </div>
+            <div class="print-preview-wrap batch-preview-wrap" id="batch-preview-wrap">
+              <div id="batch-preview-content" style="display:flex;flex-direction:column;flex-wrap:nowrap;gap:10px;justify-content:flex-start;align-items:center"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="admin-modal-footer">
+        <button class="btn btn-ghost" style="flex:1" onclick="App.admin.closeBatchPrintModal()">ยกเลิก</button>
+        <button class="btn btn-secondary" style="flex:1.4" onclick="App.admin.downloadBatchPrintPdf()">📄 พิมพ์ PDF</button>
+        <button class="btn btn-primary" style="flex:2" onclick="App.admin.doBatchPrint()">🖨 พิมพ์ทั้งหมด (<span id="batch-print-count">0</span> ออเดอร์)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATE PICKER POPUP -->
+  <div id="date-picker-popup" class="admin-modal" onclick="if(event.target===this)App.admin.closeDatePickerPopup()">
+    <div class="admin-modal-box date-popup-box" onclick="event.stopPropagation()" style="max-width:420px">
+      <div class="admin-modal-header">
+        <h3>📅 เลือกช่วงวันที่</h3>
+        <button class="btn-icon" onclick="App.admin.closeDatePickerPopup()">✕</button>
+      </div>
+      <div class="admin-modal-body" style="padding:14px 16px 10px">
+        <div class="date-popup-range-tabs">
+          <button id="dp-tab-from" class="date-popup-tab active" onclick="App.admin.setDatePickerTarget('from')">เริ่มวันที่</button>
+          <button id="dp-tab-to" class="date-popup-tab" onclick="App.admin.setDatePickerTarget('to')">สิ้นสุดวันที่</button>
+        </div>
+        <div class="date-popup-current">
+          <div>เริ่ม: <strong id="dp-from-val">-</strong></div>
+          <div>สิ้นสุด: <strong id="dp-to-val">-</strong></div>
+        </div>
+        <div class="date-popup-nav">
+          <button class="btn btn-ghost date-nav-btn" onclick="App.admin.shiftDatePickerMonth(-1)">‹</button>
+          <div id="dp-month-label" class="date-popup-month">เดือน</div>
+          <button class="btn btn-ghost date-nav-btn" onclick="App.admin.shiftDatePickerMonth(1)">›</button>
+        </div>
+        <div class="date-popup-weekdays">
+          <span>อา</span><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span>
+        </div>
+        <div id="dp-grid" class="date-popup-grid"></div>
+        <div class="date-popup-quick">
+          <button class="btn btn-secondary date-quick-btn" onclick="App.admin.quickPickDateRange('today')">วันนี้</button>
+          <button class="btn btn-secondary date-quick-btn" onclick="App.admin.quickPickDateRange('7')">7 วัน</button>
+          <button class="btn btn-secondary date-quick-btn" onclick="App.admin.quickPickDateRange('30')">30 วัน</button>
+          <button class="btn btn-ghost date-quick-btn" onclick="App.admin.quickPickDateRange('clear')">ล้าง</button>
+        </div>
+      </div>
+      <div class="admin-modal-footer">
+        <button class="btn btn-ghost" style="flex:1" onclick="App.admin.closeDatePickerPopup()">ยกเลิก</button>
+        <button class="btn btn-primary" style="flex:2" onclick="App.admin.applyDatePickerPopup()">ใช้งานช่วงวันที่นี้</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRINT MODAL -->
+  <div id="print-modal" class="admin-modal">
+    <div class="admin-modal-box print-modal-box" onclick="event.stopPropagation()" style="max-width:680px;width:96vw">
+      <div class="admin-modal-header">
+        <h3 id="print-modal-title">🖨 พิมพ์ใบเสร็จ / สติ๊กเกอร์</h3>
+        <button class="btn-icon" onclick="App.admin.closePrintModal()">✕</button>
+      </div>
+      <div class="admin-modal-body" style="padding:0">
+        <!-- Tabs -->
+        <div class="print-tabs">
+          <button class="print-tab active" id="ptab-receipt" onclick="App.admin.switchPrintTab('receipt',this)">🧾 ใบเสร็จ</button>
+          <button class="print-tab" id="ptab-sticker" onclick="App.admin.switchPrintTab('sticker',this)">🏷 สติ๊กเกอร์</button>
+        </div>
+        <div class="print-layout">
+          <!-- LEFT: Settings panel -->
+          <div class="print-settings-panel">
+            <div class="print-section-title">⚙️ ตั้งค่าการแสดงผล</div>
+
+            <!-- Receipt Settings -->
+            <div id="receipt-settings" class="print-settings-group">
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-payment" checked onchange="App.admin.updatePrintPreview()"><span>วิธีชำระเงิน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-shop-name" checked onchange="App.admin.updatePrintPreview()"><span>ชื่อร้าน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-order-id" checked onchange="App.admin.updatePrintPreview()"><span>หมายเลขออเดอร์</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-datetime" checked onchange="App.admin.updatePrintPreview()"><span>วันที่/เวลา</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-customer" checked onchange="App.admin.updatePrintPreview()"><span>ชื่อลูกค้า</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-dept" checked onchange="App.admin.updatePrintPreview()"><span id="ps-dept-label">หมู่บ้าน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-items" checked onchange="App.admin.updatePrintPreview()"><span>รายการอาหาร</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-total" checked onchange="App.admin.updatePrintPreview()"><span>ยอดรวม</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-address" checked onchange="App.admin.updatePrintPreview()"><span id="ps-address-label">ที่อยู่จัดส่ง</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-thankyou" checked onchange="App.admin.updatePrintPreview()"><span>ข้อความขอบคุณ</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ps-qr" checked onchange="App.admin.updatePrintPreview()"><span>QR สแกนจ่ายท้ายบิล (COD)</span></label></div>
+              <div class="print-field-separator"></div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:13px;margin-bottom:4px">ข้อความขอบคุณ</label>
+                <input type="text" id="ps-thankyou-text" class="form-input" style="font-size:13px" value="ขอบคุณที่ใช้บริการ 🙏" oninput="App.admin.updatePrintPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:13px;margin-bottom:4px">ความกว้างใบเสร็จ</label>
+                <select id="ps-paper" class="form-input" style="font-size:13px" onchange="App.admin.onPaperSelectChanged('ps-paper','single')"></select>
+              </div>
+              <div class="print-field-row" style="display:none">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">แนวกระดาษ</label>
+                <select id="ps-orientation" class="form-input" style="font-size:12px" onchange="App.admin.onOrientationChanged('ps-orientation','single')">
+                  <option value="portrait">แนวตั้ง</option>
+                  <option value="landscape">แนวนอน</option>
+                </select>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:13px;margin-bottom:4px">ตั้งค่าความกว้าง</label>
+                <div style="display:flex;gap:6px">
+                  <input type="text" id="ps-paper-preset-input" class="form-input" style="font-size:13px" placeholder="เพิ่มความกว้าง เช่น 72mm">
+                  <button class="btn btn-secondary" style="width:auto;padding:8px 10px;font-size:12px" onclick="App.admin.savePaperPreset('receipt','single')">บันทึก</button>
+                  <button class="btn btn-ghost" style="width:auto;padding:8px 10px;font-size:12px" onclick="App.admin.deletePaperPreset('receipt','single')">ลบ</button>
+                </div>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ชดเชยเครื่องพิมพ์ใบเสร็จ Scale (%)</label>
+                <input type="number" id="ps-r-scale" class="form-input" style="font-size:12px" min="80" max="120" step="0.1" value="100" oninput="App.admin.updatePrintPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ขนาดข้อความ (%)</label>
+                <input type="number" id="ps-text-scale" class="form-input" style="font-size:12px" min="70" max="160" step="1" value="100" oninput="App.admin.updatePrintPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ระยะห่างบรรทัด (%)</label>
+                <input type="number" id="ps-line-height" class="form-input" style="font-size:12px" min="70" max="170" step="1" value="100" oninput="App.admin.updatePrintPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ชดเชยใบเสร็จ X/Y (mm)</label>
+                <div style="display:flex;gap:6px">
+                  <input type="number" id="ps-r-offset-x" class="form-input" style="font-size:12px" step="0.1" value="0" oninput="App.admin.updatePrintPreview()" placeholder="X">
+                  <input type="number" id="ps-r-offset-y" class="form-input" style="font-size:12px" step="0.1" value="0" oninput="App.admin.updatePrintPreview()" placeholder="Y">
+                </div>
+              </div>
+            </div>
+
+            <!-- Sticker Settings -->
+            <div id="sticker-settings" class="print-settings-group" style="display:none">
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ss-payment" checked onchange="App.admin.updatePrintPreview()"><span>วิธีชำระเงิน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ss-shop-name" checked onchange="App.admin.updatePrintPreview()"><span>ชื่อร้าน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ss-order-id" checked onchange="App.admin.updatePrintPreview()"><span>หมายเลขออเดอร์</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ss-customer" checked onchange="App.admin.updatePrintPreview()"><span>ชื่อลูกค้า</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ss-dept" checked onchange="App.admin.updatePrintPreview()"><span id="ss-dept-label">หมู่บ้าน</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ss-items" checked onchange="App.admin.updatePrintPreview()"><span>รายการอาหาร</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ss-total" onchange="App.admin.updatePrintPreview()"><span>ยอดรวม</span></label></div>
+              <div class="print-field-row"><label class="print-toggle-label"><input type="checkbox" id="ss-address" checked onchange="App.admin.updatePrintPreview()"><span id="ss-address-label">ที่อยู่จัดส่ง</span></label></div>
+              <div class="print-field-separator"></div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:13px;margin-bottom:4px">ขนาดสติ๊กเกอร์</label>
+                <select id="ss-size" class="form-input" style="font-size:13px" onchange="App.admin.onPaperSelectChanged('ss-size','single')"></select>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">แนวกระดาษ</label>
+                <select id="ss-orientation" class="form-input" style="font-size:12px" onchange="App.admin.onOrientationChanged('ss-orientation','single')">
+                  <option value="portrait">แนวตั้ง</option>
+                  <option value="landscape">แนวนอน</option>
+                </select>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:13px;margin-bottom:4px">ตั้งค่ากระดาษ</label>
+                <div style="display:flex;gap:6px">
+                  <input type="text" id="ss-size-preset-input" class="form-input" style="font-size:13px" placeholder="เพิ่มขนาด เช่น 60x30 หรือ 40*30">
+                  <button class="btn btn-secondary" style="width:auto;padding:8px 10px;font-size:12px" onclick="App.admin.savePaperPreset('sticker','single')">บันทึก</button>
+                  <button class="btn btn-ghost" style="width:auto;padding:8px 10px;font-size:12px" onclick="App.admin.deletePaperPreset('sticker','single')">ลบ</button>
+                </div>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:13px;margin-bottom:4px">สไตล์</label>
+                <select id="ss-style" class="form-input" style="font-size:13px" onchange="App.admin.updatePrintPreview()">
+                  <option value="bold">Bold (ตัวหนา)</option>
+                  <option value="minimal">Minimal (มินิมอล)</option>
+                </select>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ชดเชยเครื่องพิมพ์ Scale (%)</label>
+                <input type="number" id="ss-scale" class="form-input" style="font-size:12px" min="80" max="120" step="0.1" value="100" oninput="App.admin.updatePrintPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ขนาดข้อความ (%)</label>
+                <input type="number" id="ss-text-scale" class="form-input" style="font-size:12px" min="70" max="160" step="1" value="100" oninput="App.admin.updatePrintPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ระยะห่างบรรทัด (%)</label>
+                <input type="number" id="ss-line-height" class="form-input" style="font-size:12px" min="70" max="170" step="1" value="100" oninput="App.admin.updatePrintPreview()">
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">ชดเชย X/Y (mm)</label>
+                <div style="display:flex;gap:6px">
+                  <input type="number" id="ss-offset-x" class="form-input" style="font-size:12px" step="0.1" value="0" oninput="App.admin.updatePrintPreview()" placeholder="X">
+                  <input type="number" id="ss-offset-y" class="form-input" style="font-size:12px" step="0.1" value="0" oninput="App.admin.updatePrintPreview()" placeholder="Y">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: Preview -->
+          <div class="print-preview-panel">
+            <div class="print-section-title">👁 ตัวอย่างก่อนพิมพ์</div>
+            <div class="print-preview-wrap" id="print-preview-wrap">
+              <div id="print-preview-content"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="admin-modal-footer">
+        <button class="btn btn-ghost" style="flex:1" onclick="App.admin.closePrintModal()">ยกเลิก</button>
+        <button class="btn btn-secondary" style="flex:1.4" onclick="App.admin.downloadSinglePrintPdf()">📄 พิมพ์ PDF</button>
+        <button class="btn btn-primary" style="flex:2" onclick="App.admin.doPrint()">🖨 พิมพ์</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BANK MODAL -->
+  <div id="bank-modal" class="admin-modal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="admin-modal-box" onclick="event.stopPropagation()">
+      <div class="admin-modal-header"><h3 id="bank-modal-title">เพิ่มบัญชีธนาคาร</h3><button class="btn-icon" onclick="document.getElementById('bank-modal').classList.remove('active')">✕</button></div>
+      <div class="admin-modal-body">
+        <input type="hidden" id="bf-idx" value="-1">
+        <div class="form-group">
+          <label class="form-label">ธนาคาร *</label>
+          <div id="bank-selector" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px"></div>
+          <input type="hidden" id="bf-bank-code">
+          <input type="hidden" id="bf-bank-name">
+        </div>
+        <div class="form-group"><label class="form-label">เลขบัญชี *</label><input id="bf-acct" type="text" class="form-input" placeholder="xxx-x-xxxxx-x"></div>
+        <div class="form-group"><label class="form-label">ชื่อบัญชี *</label><input id="bf-name" type="text" class="form-input" placeholder="ชื่อ-นามสกุล"></div>
+      </div>
+      <div class="admin-modal-footer"><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('bank-modal').classList.remove('active')">ยกเลิก</button><button class="btn btn-primary" style="flex:2" onclick="App.admin.saveBank()">บันทึก</button></div>
+    </div>
+  </div>
+  
+  <!-- LINE SETUP GUIDE MODAL -->
+  <div id="line-setup-modal" class="admin-modal" onclick="if(event.target===this)App.admin.closeLineSetupGuide()">
+    <div class="admin-modal-box line-guide-modal" onclick="event.stopPropagation()">
+      <div class="admin-modal-header">
+        <h3>📘 คู่มือตั้งค่า LINE แจ้งเตือนแบบละเอียด</h3>
+        <button class="btn-icon" onclick="App.admin.closeLineSetupGuide()">✕</button>
+      </div>
+      <div class="admin-modal-body">
+        <div id="line-guide-intro" class="line-guide-intro">
+          <div class="line-guide-badges">
+            <span class="line-guide-badge b-newbie">มือใหม่</span>
+            <span class="line-guide-badge b-important">สำคัญ</span>
+          </div>
+          <div class="line-guide-title">เริ่มตั้งค่า LINE แจ้งเตือนใน 4 ขั้นตอนหลัก</div>
+          <div class="text-sm text-muted" style="margin-top:6px">
+            หน้านี้เป็นจุดเริ่มต้นแบบสั้น ๆ ก่อน จากนั้นกด <strong>Start Setup</strong> เพื่อดูขั้นตอนละเอียดทีละหัวข้อ
+          </div>
+          <ol class="line-guide-mini-steps">
+            <li>สร้าง LINE Official Account</li>
+            <li>เปิดใช้งาน Messaging API</li>
+            <li>ออก Channel Access Token แล้วนำมาใส่ระบบ</li>
+            <li>หา Group ID / User ID แล้วทดสอบส่งข้อความ</li>
+          </ol>
+          <div class="line-guide-intro-actions">
+            <button class="btn btn-primary" type="button" onclick="App.admin.lineGuideStartSetup()">Start Setup</button>
+          </div>
+        </div>
+
+        <div id="line-guide-steps" class="line-guide-steps hidden">
+          <div class="line-guide-toolbar">
+            <span class="line-guide-badge b-newbie">คู่มือทีละขั้น</span>
+            <span class="text-xs text-muted">ระบบจะจำหัวข้อที่เปิดล่าสุดให้อัตโนมัติ</span>
+          </div>
+
+          <div class="line-guide-accordion">
+            <div id="lg-sec-overview" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-overview')">
+                <span>1) ภาพรวมก่อนเริ่ม</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <p class="line-guide-p">LINE แจ้งเตือนต้องใช้ 2 อย่างร่วมกัน:</p>
+                <ul class="line-guide-list">
+                  <li><strong>LINE Official Account</strong> = บัญชีร้านที่ลูกค้า/ทีมงานเห็น</li>
+                  <li><strong>Messaging API</strong> = ระบบส่งข้อความอัตโนมัติ</li>
+                </ul>
+                <p class="line-guide-p warn">สำคัญ: ต้องใช้ <strong>Channel Access Token</strong> ไม่ใช่ Channel Secret</p>
+              </div>
+            </div>
+
+            <div id="lg-sec-oa" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-oa')">
+                <span>2) สมัคร LINE Official Account</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <ol class="line-guide-list num">
+                  <li>เข้า <a href="https://manager.line.biz/" target="_blank" rel="noopener">https://manager.line.biz/</a></li>
+                  <li>Login ด้วย LINE ส่วนตัว</li>
+                  <li>กดสร้างบัญชี</li>
+                  <li>ตั้งชื่อร้าน</li>
+                  <li>เลือกหมวดหมู่ เช่น ร้านอาหาร</li>
+                  <li>กดสร้างบัญชี</li>
+                </ol>
+              </div>
+            </div>
+
+            <div id="lg-sec-messaging-api" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-messaging-api')">
+                <span>3) เปิด Messaging API</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <ol class="line-guide-list num">
+                  <li>เข้า LINE Official Account Manager</li>
+                  <li>เลือกบัญชีร้าน</li>
+                  <li>ไปที่ ตั้งค่า</li>
+                  <li>ไปที่ Messaging API</li>
+                  <li>กด “ใช้ Messaging API”</li>
+                  <li>ถ้าระบบให้สร้าง Provider ให้ตั้งชื่อ เช่น FoodOrder System</li>
+                  <li>กดยืนยัน</li>
+                </ol>
+              </div>
+            </div>
+
+            <div id="lg-sec-token" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-token')">
+                <span>4) หา Channel Access Token</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <ol class="line-guide-list num">
+                  <li>เข้า <a href="https://developers.line.biz/console/" target="_blank" rel="noopener">https://developers.line.biz/console/</a></li>
+                  <li>เลือก Provider</li>
+                  <li>เลือก Channel ประเภท Messaging API</li>
+                  <li>เข้าแท็บ Messaging API</li>
+                  <li>เลื่อนลงหา “Channel access token”</li>
+                  <li>กด Issue</li>
+                  <li>Copy token มาใส่ช่อง Channel Access Token ในระบบ</li>
+                </ol>
+                <div class="line-guide-callout warn">
+                  <div>ห้ามใช้ Channel Secret แทน Token</div>
+                  <div>Token มักยาวมาก และเป็นข้อมูลลับ ห้ามส่งให้คนอื่น</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="lg-sec-group-permission" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-group-permission')">
+                <span>5) ตั้งค่าให้บอทเข้ากลุ่มได้</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <ol class="line-guide-list num">
+                  <li>เข้า LINE Developers Console</li>
+                  <li>เข้า Channel &gt; Messaging API</li>
+                  <li>หา “Allow bot to join group chats” และตั้งเป็น Enabled</li>
+                  <li>แนะนำปิด Auto-reply messages</li>
+                  <li>แนะนำปิด Greeting messages</li>
+                </ol>
+              </div>
+            </div>
+
+            <div id="lg-sec-webhook" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-webhook')">
+                <span>6) เปิด Webhook เพื่อหา Group ID</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <p class="line-guide-p">
+                  Webhook ใช้เพื่อรับ event ตอนมีคนพิมพ์ในกลุ่ม ระบบนี้ใช้ Webhook แค่เพื่อหา Group ID เท่านั้น
+                  ส่วนการแจ้งเตือนจริงใช้ Push Message
+                </p>
+                <ol class="line-guide-list num">
+                  <li>Copy Web App URL ของระบบ (ตัวอย่างด้านล่าง)</li>
+                  <li>ใส่ช่อง Webhook URL</li>
+                  <li>กด Verify</li>
+                  <li>เปิด Use webhook = Enabled</li>
+                  <li>ต้องใช้ /exec ไม่ใช่ /dev</li>
+                  <li>หลังแก้ Code.gs ต้อง Deploy New Version เสมอ</li>
+                </ol>
+                <div class="line-guide-copy-row">
+                  <code id="line-webhook-example-url">https://script.google.com/macros/s/xxxxx/exec</code>
+                  <button class="btn btn-ghost" type="button" onclick="App.admin.copyLineGuideWebhookExample()">Copy URL ตัวอย่าง</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="lg-sec-user-id" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-user-id')">
+                <span>7) หา User ID</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <p class="line-guide-p">User ID ใช้ส่งแจ้งเตือนเข้าหาคนเดียว และมักขึ้นต้นด้วย U</p>
+                <ol class="line-guide-list num">
+                  <li>เข้า LINE Developers Console</li>
+                  <li>เข้า Channel &gt; Messaging API</li>
+                  <li>เลื่อนหา Your user ID</li>
+                  <li>Copy มาใส่ Target ID</li>
+                  <li>เลือก Target Type = user</li>
+                </ol>
+              </div>
+            </div>
+
+            <div id="lg-sec-group-id" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-group-id')">
+                <span>8) หา Group ID</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <p class="line-guide-p">Group ID ใช้ส่งเข้ากลุ่ม และมักขึ้นต้นด้วย C เหมาะกับกลุ่มครัว/กลุ่มร้าน</p>
+                <ol class="line-guide-list num">
+                  <li>เปิด Allow bot to join group chats</li>
+                  <li>เพิ่ม LINE OA เข้ากลุ่ม LINE</li>
+                  <li>ตั้ง Webhook URL แล้วเปิด Use webhook</li>
+                  <li>พิมพ์ข้อความในกลุ่ม 1 ครั้ง เช่น “ทดสอบ”</li>
+                  <li>กลับมาที่ระบบ แล้วกด “ดึง Group ID ล่าสุด”</li>
+                  <li>ระบบจะเติม Target ID ให้อัตโนมัติ</li>
+                  <li>เลือก Target Type = group</li>
+                  <li>กดบันทึก</li>
+                </ol>
+              </div>
+            </div>
+
+            <div id="lg-sec-test" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-test')">
+                <span>9) ทดสอบส่ง LINE</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <ol class="line-guide-list num">
+                  <li>เปิดใช้งาน LINE = ON</li>
+                  <li>ใส่ Channel Access Token</li>
+                  <li>เลือก Target Type</li>
+                  <li>ใส่ Target ID</li>
+                  <li>กดบันทึก</li>
+                  <li>กด “ทดสอบส่ง LINE”</li>
+                  <li>ถ้า LINE กลุ่มได้รับข้อความ แปลว่าสำเร็จ</li>
+                </ol>
+              </div>
+            </div>
+
+            <div id="lg-sec-faq" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-faq')">
+                <span>10) ปัญหาที่พบบ่อย (FAQ)</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <div class="line-faq-wrap">
+                  <div id="line-faq-1" class="line-faq-item">
+                    <button class="line-faq-q" type="button" onclick="App.admin.lineGuideToggleFaq('line-faq-1')">Q: Channel Access Token คือ Channel Secret ไหม?</button>
+                    <div class="line-faq-a">A: ไม่ใช่ คนละตัวกัน ต้องใช้ Channel Access Token เท่านั้น</div>
+                  </div>
+                  <div id="line-faq-2" class="line-faq-item">
+                    <button class="line-faq-q" type="button" onclick="App.admin.lineGuideToggleFaq('line-faq-2')">Q: พิมพ์ในกลุ่มแล้วขึ้นอ่านแล้ว แต่ยังดึง Group ID ไม่ได้?</button>
+                    <div class="line-faq-a">A: แปลว่า OA อยู่ในกลุ่มแล้ว แต่ Webhook อาจยังไม่เข้า ให้เช็ก Webhook URL, Use webhook, Deploy New Version และดู Apps Script Executions</div>
+                  </div>
+                  <div id="line-faq-3" class="line-faq-item">
+                    <button class="line-faq-q" type="button" onclick="App.admin.lineGuideToggleFaq('line-faq-3')">Q: กด Verify ไม่ผ่าน?</button>
+                    <div class="line-faq-a">A: ตรวจว่า Webhook URL เป็น /exec, Web App เปิด Anyone can access, และมี doPost(e)</div>
+                  </div>
+                  <div id="line-faq-4" class="line-faq-item">
+                    <button class="line-faq-q" type="button" onclick="App.admin.lineGuideToggleFaq('line-faq-4')">Q: หา Channel Access Token ไม่เจอ?</button>
+                    <div class="line-faq-a">A: ต้องเข้า Channel ประเภท Messaging API ไม่ใช่ LINE Login</div>
+                  </div>
+                  <div id="line-faq-5" class="line-faq-item">
+                    <button class="line-faq-q" type="button" onclick="App.admin.lineGuideToggleFaq('line-faq-5')">Q: ส่ง LINE ไม่เข้า?</button>
+                    <div class="line-faq-a">A: เช็ก Token, Target ID, Target Type, OA อยู่ในกลุ่ม, และ Allow bot join group เปิดแล้ว</div>
+                  </div>
+                  <div id="line-faq-6" class="line-faq-item">
+                    <button class="line-faq-q" type="button" onclick="App.admin.lineGuideToggleFaq('line-faq-6')">Q: ต้องใช้ Channel Secret ไหม?</button>
+                    <div class="line-faq-a">A: ไม่ต้อง สำหรับระบบส่งแจ้งเตือนใช้ Channel Access Token เท่านั้น</div>
+                  </div>
+                  <div id="line-faq-7" class="line-faq-item">
+                    <button class="line-faq-q" type="button" onclick="App.admin.lineGuideToggleFaq('line-faq-7')">Q: ต้องเปิด Webhook ตลอดไหม?</button>
+                    <div class="line-faq-a">A: ถ้าหา Group ID แล้ว การส่งแบบ Push Message ไม่จำเป็นต้องพึ่ง Webhook แต่เปิดไว้ได้</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="lg-sec-checklist" class="line-guide-item">
+              <button class="line-guide-item-head" type="button" onclick="App.admin.lineGuideToggleStep('lg-sec-checklist')">
+                <span>11) Checklist ก่อนใช้งานจริง</span>
+                <span class="line-guide-chevron">▾</span>
+              </button>
+              <div class="line-guide-item-body">
+                <div class="line-guide-checklist">
+                  <label><input type="checkbox" id="lgc-1" onchange="App.admin.lineGuideSaveChecklist()"> สร้าง LINE OA แล้ว</label>
+                  <label><input type="checkbox" id="lgc-2" onchange="App.admin.lineGuideSaveChecklist()"> เปิด Messaging API แล้ว</label>
+                  <label><input type="checkbox" id="lgc-3" onchange="App.admin.lineGuideSaveChecklist()"> กด Issue Channel Access Token แล้ว</label>
+                  <label><input type="checkbox" id="lgc-4" onchange="App.admin.lineGuideSaveChecklist()"> เปิด Allow bot join group แล้ว</label>
+                  <label><input type="checkbox" id="lgc-5" onchange="App.admin.lineGuideSaveChecklist()"> ปิด Auto-reply แล้ว</label>
+                  <label><input type="checkbox" id="lgc-6" onchange="App.admin.lineGuideSaveChecklist()"> ใส่ Webhook URL /exec แล้ว</label>
+                  <label><input type="checkbox" id="lgc-7" onchange="App.admin.lineGuideSaveChecklist()"> เปิด Use webhook แล้ว</label>
+                  <label><input type="checkbox" id="lgc-8" onchange="App.admin.lineGuideSaveChecklist()"> เพิ่ม OA เข้ากลุ่มแล้ว</label>
+                  <label><input type="checkbox" id="lgc-9" onchange="App.admin.lineGuideSaveChecklist()"> พิมพ์ทดสอบในกลุ่มแล้ว</label>
+                  <label><input type="checkbox" id="lgc-10" onchange="App.admin.lineGuideSaveChecklist()"> ดึง Group ID สำเร็จแล้ว</label>
+                  <label><input type="checkbox" id="lgc-11" onchange="App.admin.lineGuideSaveChecklist()"> กดบันทึกแล้ว</label>
+                  <label><input type="checkbox" id="lgc-12" onchange="App.admin.lineGuideSaveChecklist()"> ทดสอบส่ง LINE สำเร็จแล้ว</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="admin-modal-footer line-guide-footer">
+        <button class="btn btn-ghost" style="flex:1" onclick="App.admin.closeLineSetupGuide()">ปิดคู่มือ</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- CROP MODAL -->
+<div id="crop-modal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.85);flex-direction:column;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:var(--radius-lg);width:min(92vw,420px);overflow:hidden;display:flex;flex-direction:column">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-weight:700;font-size:16px">✂️ ครอบรูป (1:1)</span>
+      <button class="btn-icon" onclick="App.admin.closeCrop()">✕</button>
+    </div>
+    <div style="padding:12px;background:#1a1a1a;display:flex;align-items:center;justify-content:center;overflow:hidden">
+      <div id="crop-viewport" style="position:relative;width:300px;height:300px;overflow:hidden;border-radius:4px;cursor:grab;touch-action:none">
+        <canvas id="crop-canvas" style="position:absolute;top:0;left:0"></canvas>
+        <!-- grid overlay -->
+        <div style="position:absolute;inset:0;pointer-events:none;border:2px solid rgba(255,255,255,.6)">
+          <div style="position:absolute;top:33.33%;left:0;right:0;height:1px;background:rgba(255,255,255,.3)"></div>
+          <div style="position:absolute;top:66.66%;left:0;right:0;height:1px;background:rgba(255,255,255,.3)"></div>
+          <div style="position:absolute;left:33.33%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.3)"></div>
+          <div style="position:absolute;left:66.66%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.3)"></div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:12px;color:var(--text2);white-space:nowrap">🔍 ขยาย</span>
+        <input type="range" id="crop-zoom" min="100" max="400" value="100" style="flex:1;accent-color:var(--primary)" oninput="App.admin.onCropZoom(this.value)">
+        <span id="crop-zoom-val" style="font-size:12px;color:var(--text2);min-width:36px">100%</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn btn-ghost" style="flex:1" onclick="App.admin.closeCrop()">ยกเลิก</button>
+        <button type="button" class="btn btn-primary" style="flex:2" onclick="App.admin.applyCrop()">✓ ใช้รูปนี้</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+(function(){
+  var q=new URLSearchParams(window.location.search||'');
+  var isAdmin=(q.get('page')==='admin');
+  window._isAdmin=isAdmin;
+  window._gasPage=isAdmin?'admin':'customer';
+  localStorage.removeItem('_adminMode');
+  var ae=document.getElementById('admin-app'),ce=document.getElementById('customer-app');
+  if(isAdmin){if(ae)ae.style.display='';if(ce)ce.style.display='none';}
+  else{
+    if(ae)ae.style.display='none';
+    if(ce)ce.style.display='';
+    var pm=document.getElementById('page-menu');
+    if(pm)pm.classList.add('active');
+  }
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
+
 
