@@ -1,4 +1,3 @@
-
 const GasAPI = {
   async call(action,payload){
     if(!window.APP_CONFIG||!window.APP_CONFIG.API_BASE_URL||/PUT_APPS_SCRIPT_WEB_APP_URL_HERE/.test(String(window.APP_CONFIG.API_BASE_URL||''))){
@@ -49,13 +48,20 @@ var App={
     _adminCache:{},_settingsRaw:{},_settingsPublic:null,_settingsPublicAt:0,_settingsPublicLoading:false,_settingsPublicQueue:[],
     _deliveryCategoryType:'village',_deliveryNoteMode:'note',
     _cashPaymentEnabled:false,_promptpayEnabled:true,_bankPaymentEnabled:true,_paymentMethod:'scan',_payTimeoutSec:900,
-    printing:{tab:'receipt',orders:[],queue:[],templates:{sticker:[],receipt:[]},selected:{sticker:{},receipt:{}},search:{sticker:'',receipt:''},page:{sticker:1,receipt:1},poller:null,method:'browser',btAutoConnect:false,lastOrdersFetchAt:0,ordersLoading:false}
+    printing:{tab:'receipt',orders:[],queue:[],templates:{sticker:[],receipt:[]},selected:{sticker:{},receipt:{}},search:{sticker:'',receipt:''},page:{sticker:1,receipt:1},poller:null,method:'browser',btAutoConnect:false,lastOrdersFetchAt:0,ordersLoading:false,stickerPreviewZoom:160}
   },
 
   u:{
     debounce(key,ms){ms=ms||800;if(App.state._actionBusy[key])return true;App.state._actionBusy[key]=true;setTimeout(function(){delete App.state._actionBusy[key];},ms);return false;},
     esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');},
     fmt(n){return '฿'+Math.round(toNum(n)).toLocaleString('th-TH');},
+    shortOrderId:function(id){
+      var raw=String(id==null?'':id).trim();
+      if(!raw)return '-';
+      var clean=raw.replace(/[^a-zA-Z0-9]/g,'');
+      if(!clean)return '#'+raw.slice(-6);
+      return '#'+clean.slice(-6).toUpperCase();
+    },
     digitsOnly(v){return String(v==null?'':v).replace(/[^0-9]/g,'');},
     isValidPromptPayId(v){
       var d=App.u.digitsOnly(v);
@@ -185,7 +191,15 @@ var App={
         if(!opts.noSuccessToast)App.ui.toast((opts.successMsg||'✅ ดำเนินการสำเร็จ'),'success');
         if(opts.modalId){
           var delay=opts.modalCloseDelay!=null?opts.modalCloseDelay:600;
-          setTimeout(function(){var m=document.getElementById(opts.modalId);if(m)m.classList.remove('active');},delay);
+          setTimeout(function(){
+            var m=document.getElementById(opts.modalId);
+            if(!m)return;
+            if(m.classList.contains('admin-modal')&&App&&App.admin&&App.admin.closeAdminModal){
+              App.admin.closeAdminModal(opts.modalId);
+            }else{
+              m.classList.remove('active');
+            }
+          },delay);
         }
         if(opts.onSuccess)opts.onSuccess(res);
       });
@@ -267,6 +281,7 @@ var App={
       if(fn==='updateAdminUser')return{success:true,data:{username:args[0]&&args[0].username}};
       if(fn==='deleteAdminUser')return{success:true,data:{deleted:true,id:args[0]}};
       if(fn==='saveSettings')return{success:true,data:{saved:true}};
+      if(fn==='saveSettingsPartial')return{success:true,data:{saved:true}};
       if(fn==='getNotificationSettings')return{success:true,data:{
         notification_line_enabled:'0',
         notification_line_channel_access_token_masked:'',
@@ -274,7 +289,8 @@ var App={
         notification_line_target_id:'',
         notification_telegram_enabled:'0',
         notification_telegram_bot_token_masked:'',
-        notification_telegram_chat_id:''
+        notification_telegram_chat_id:'',
+        notification_include_admin_link:'0'
       }};
       if(fn==='saveNotificationSettings')return{success:true,data:{saved:true}};
       if(fn==='testLineNotification')return{success:true,data:{ok:true,message:'โหมดเดโม: ส่ง LINE สำเร็จ'}};
@@ -282,6 +298,14 @@ var App={
       if(fn==='getLatestLineWebhookIds')return{success:true,data:{notification_line_last_group_id:'C_DEMO_GROUP_ID',notification_line_last_user_id:'U_DEMO_USER_ID'}};
       if(fn==='testSlipOKConnection')return{success:true,data:{ok:true,message:'โหมดเดโม: SlipOK พร้อมใช้งาน'}};
       if(fn==='testGoogleDriveConnection')return{success:true,data:{ok:true,message:'โหมดเดโม: Google Drive พร้อมใช้งาน'}};
+      if(fn==='createMenuImageFolder')return{success:true,data:{folderId:'DEMO_FOLDER_ID',folderName:'FoodOrder Menu Images',folderUrl:'https://drive.google.com/drive/folders/DEMO_FOLDER_ID',created:false}};
+      if(fn==='migrateMenuImagesToDrive')return{success:true,data:{done:true,cursor:null,total:0,migrated:0,skipped:0,failed:0,results:[]}};
+      if(fn==='backupMenuBeforeImageMigration')return{success:true,data:{ok:true,created:false,sheetName:'MENU_BACKUP_BEFORE_IMAGE_MIGRATION'}};
+      if(fn==='verifyMigratedMenuImages')return{success:true,data:{done:true,cursor:null,total:0,ok:0,skipped:0,broken:0,results:[]}};
+      if(fn==='getMenuImageMigrationRollbackCandidates')return{success:true,data:{total:0,items:[]}};
+      if(fn==='rollbackMenuImageMigration')return{success:true,data:{total:0,restored:0,skipped:0,failed:0,dryRun:true}};
+      if(fn==='migrateSheetBase64MenuImagesToDrive')return{success:true,data:{done:true,cursor:null,total:0,migrated:0,skipped:0,failed:0,results:[]}};
+      if(fn==='verifyMenuImageStorage')return{success:true,data:{base64:0,drive:0,external:0,empty:0,total:0}};
       if(fn==='saveMenuOrder')return{success:true,data:{saved:true}};
       if(fn==='getGuestLoginState')return{success:true,data:{enabled:true}};
       if(fn==='updateOrderStatus')return{success:true,data:{orderId:args[0],status:args[1]}};
@@ -1459,6 +1483,7 @@ var App={
     _sessionKey:'foodorder_admin_session_v1',
     _sessionTtlMs:8*60*60*1000,
     _notificationCacheKey:'fo_notification_settings_cache_v1',
+    _brandingCacheKey:'fo_admin_branding',
     _lineGuideStateKey:'fo_line_setup_guide_state_v1',
     _lineGuideChecklistKey:'fo_line_setup_guide_checklist_v1',
     _getCache:function(key,maxAgeMs){
@@ -1500,10 +1525,88 @@ var App={
     _clearNotificationLocalCache:function(){
       try{localStorage.removeItem(App.admin._notificationCacheKey);}catch(_){}
     },
+    _saveBrandingCache:function(name,logo){
+      try{
+        localStorage.setItem(App.admin._brandingCacheKey,JSON.stringify({
+          restaurant_name:String(name||'FoodOrder'),
+          restaurant_logo:String(logo||''),
+          updated_at:Date.now()
+        }));
+      }catch(_){}
+    },
+    _getBrandingCache:function(){
+      try{
+        var raw=localStorage.getItem(App.admin._brandingCacheKey);
+        if(!raw)return null;
+        var d=JSON.parse(raw||'{}');
+        if(!d||typeof d!=='object')return null;
+        return {
+          restaurant_name:String(d.restaurant_name||'FoodOrder'),
+          restaurant_logo:String(d.restaurant_logo||'')
+        };
+      }catch(_){return null;}
+    },
+    loadAdminRuntimeSettings:function(callback){
+      var done=(typeof callback==='function')?callback:function(){};
+      App.api.silent('getSettings',[App.state.adminToken],function(res){
+        if(!res||!res.success||!res.data){done(null);return;}
+        var s=res.data||{};
+        App.state._settingsRaw=s;
+        App.state._deliveryCategoryType=App.admin._normalizeDeliveryType(s.delivery_category_type||App.state._deliveryCategoryType||'village');
+        App.state._deliveryNoteMode=(App.state._deliveryCategoryType==='village'?'address':'note');
+        done(s);
+      });
+    },
     init:function(){
       App.admin._bindGoogleDriveFolderInput();
+      App.admin._initAdminModalGuards();
       if(App.admin.tryRestoreSession()){App.admin.showPanel();return;}
       App.admin.showLogin();
+    },
+    lockModalScroll:function(){
+      document.body.classList.add('modal-open');
+    },
+    unlockModalScroll:function(){
+      var anyOpen=document.querySelector('.admin-modal.active');
+      if(anyOpen)return;
+      document.body.classList.remove('modal-open');
+    },
+    openAdminModal:function(id,options){
+      var opts=options||{};
+      var m=document.getElementById(id);if(!m)return;
+      m.classList.add('active');
+      m.dataset.closeOnBackdrop=(opts.closeOnBackdrop===true)?'1':'0';
+      App.admin.lockModalScroll();
+    },
+    closeAdminModal:function(id){
+      var m=document.getElementById(id);if(!m)return;
+      m.classList.remove('active');
+      App.admin.unlockModalScroll();
+    },
+    _initAdminModalGuards:function(){
+      if(App.admin._modalGuardsInited)return;
+      App.admin._modalGuardsInited=true;
+      document.querySelectorAll('.admin-modal').forEach(function(m){
+        m.addEventListener('click',function(ev){
+          if(ev.target!==m)return;
+          var allowBackdrop=String(m.dataset.closeOnBackdrop||'0')==='1';
+          if(!allowBackdrop){
+            ev.preventDefault();
+            ev.stopPropagation();
+            return;
+          }
+          App.admin.closeAdminModal(m.id);
+        });
+      });
+      try{
+        var obs=new MutationObserver(function(){
+          if(document.querySelector('.admin-modal.active'))App.admin.lockModalScroll();
+          else App.admin.unlockModalScroll();
+        });
+        document.querySelectorAll('.admin-modal').forEach(function(m){
+          obs.observe(m,{attributes:true,attributeFilter:['class']});
+        });
+      }catch(_){}
     },
     _extractGoogleDriveResourceId:function(raw){
       var s=String(raw||'').trim();
@@ -1533,6 +1636,289 @@ var App={
       el.addEventListener('blur',sync);
       el.addEventListener('paste',function(){setTimeout(sync,0);});
       el._driveNormalizeBound=true;
+    },
+    toggleDriveAdvancedSettings:function(){
+      var p=document.getElementById('drive-advanced-panel');if(!p)return;
+      p.classList.toggle('active');
+    },
+    enableManualDriveFolderEdit:function(){
+      if(!App.admin.ensureCanManageUsersApi())return;
+      var el=document.getElementById('s-drive');if(!el)return;
+      el.readOnly=false;
+      el.focus();
+      App.ui.toast('เปิดให้แก้ไข Folder ID แบบขั้นสูงแล้ว','info');
+    },
+    copyDriveFolderId:function(){
+      var el=document.getElementById('s-drive');
+      var id=String(el&&el.value||'').trim();
+      if(!id){App.ui.toast('ยังไม่มี Folder ID','warn');return;}
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(id).then(function(){App.ui.toast('คัดลอก Folder ID แล้ว','success');}).catch(function(){App.ui.toast(id,'info');});
+      }else App.ui.toast(id,'info');
+    },
+    renderDriveFolderStatus:function(info){
+      var st=document.getElementById('api-drive-folder-status');
+      var meta=document.getElementById('api-drive-folder-meta');
+      var openBtn=document.getElementById('btn-open-drive-folder');
+      var copyBtn=document.getElementById('btn-copy-drive-id');
+      var migrateBtn=document.getElementById('btn-migrate-menu-images');
+      var id=String(info&&info.folderId||'').trim();
+      var name=String(info&&info.folderName||'').trim();
+      var url=String(info&&info.folderUrl||'').trim();
+      var ok=!!(info&&info.exists!==false&&id);
+      if(st)st.textContent=ok?'พร้อมใช้งาน':'ยังไม่ได้สร้างโฟลเดอร์';
+      if(meta)meta.textContent=ok?('ชื่อโฟลเดอร์: '+(name||'-')+' | ID: '+id):'';
+      if(openBtn){
+        if(url){openBtn.style.display='inline-flex';openBtn.href=url;}
+        else{openBtn.style.display='none';openBtn.removeAttribute('href');}
+      }
+      if(copyBtn)copyBtn.disabled=!id;
+      if(migrateBtn)migrateBtn.style.display=ok?'inline-flex':'none';
+    },
+    confirmMigrateMenuImagesAfterFolderCreate:function(folderData){
+      App.ui.confirm('ต้องการย้ายรูปเมนูเดิมเข้าโฟลเดอร์นี้เลยไหม?',function(){
+        App.admin.migrateMenuImagesToDrive();
+      },{
+        okText:'ย้ายรูปเดิมตอนนี้',
+        cancelText:'ไว้ทีหลัง',
+        icon:'info'
+      });
+    },
+    renderMenuImageMigrationStatus:function(summary){
+      summary=summary||{};
+      var box=document.getElementById('menu-image-migrate-status');
+      var bar=document.getElementById('menu-image-migrate-bar');
+      var txt=document.getElementById('menu-image-migrate-text');
+      var sum=document.getElementById('menu-image-migrate-summary');
+      var failedWrap=document.getElementById('menu-image-migrate-failed-wrap');
+      var failedList=document.getElementById('menu-image-migrate-failed-list');
+      if(!box||!bar||!txt||!sum)return;
+      box.style.display='';
+      var total=Math.max(0,parseInt(summary.total||0,10)||0);
+      var doneCount=Math.max(0,parseInt(summary.doneCount||0,10)||0);
+      var migrated=Math.max(0,parseInt(summary.migrated||0,10)||0);
+      var skipped=Math.max(0,parseInt(summary.skipped||0,10)||0);
+      var failed=Math.max(0,parseInt(summary.failed||0,10)||0);
+      var pct=total>0?Math.min(100,Math.round((doneCount/total)*100)):0;
+      bar.style.width=pct+'%';
+      if(summary.error){
+        txt.textContent='ย้ายรูปไม่สำเร็จ';
+        sum.textContent='รายละเอียด: '+String(summary.error||'เกิดข้อผิดพลาด');
+      }else if(total===0&&!summary.running){
+        txt.textContent='ไม่พบรูปเมนูที่ต้องย้าย';
+        sum.textContent='ตรวจสอบแล้ว 0 รายการ';
+      }else{
+        txt.textContent=(summary.running?'กำลังย้าย ':'เสร็จสิ้น ')+doneCount+'/'+total+' รายการ';
+        sum.textContent='สำเร็จ '+migrated+' / ข้าม '+skipped+' / ไม่สำเร็จ '+failed+(summary.currentName?(' | ล่าสุด: '+summary.currentName):'');
+      }
+      var failedItems=Array.isArray(summary.failedItems)?summary.failedItems:[];
+      if(failedWrap&&failedList){
+        if(failedItems.length){
+          failedWrap.style.display='';
+          failedList.innerHTML=failedItems.map(function(it){
+            return '<li>'+App.u.esc(String(it.menuName||it.menuId||'-'))+' - '+App.u.esc(String(it.reason||'ไม่สำเร็จ'))+'</li>';
+          }).join('');
+        }else{
+          failedWrap.style.display='none';
+          failedList.innerHTML='';
+        }
+      }
+      App.admin._lastMigrationSummary=summary;
+    },
+    copyMenuImageMigrationReport:function(){
+      var s=App.admin._lastMigrationSummary||{};
+      var txt='สรุปการย้ายรูปเมนู\n'
+        +'สำเร็จ: '+(s.migrated||0)+'\n'
+        +'ข้าม: '+(s.skipped||0)+'\n'
+        +'ไม่สำเร็จ: '+(s.failed||0)+'\n'
+        +'ทั้งหมด: '+(s.total||0);
+      var fails=Array.isArray(s.failedItems)?s.failedItems:[];
+      if(fails.length){
+        txt+='\n\nรายการที่มีปัญหา:\n'+fails.map(function(x,i){return (i+1)+'. '+String(x.menuName||x.menuId||'-')+' - '+String(x.reason||'');}).join('\n');
+      }
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(txt).then(function(){App.ui.toast('คัดลอกรายงานแล้ว','success');}).catch(function(){App.ui.toast(txt,'info');});
+      }else App.ui.toast(txt,'info');
+    },
+    backupMenuBeforeImageMigration:function(done){
+      App.api.call('backupMenuBeforeImageMigration',[App.state.adminToken],function(res){
+        if(App.admin._auth(res))return;
+        if(!res||!res.success){App.ui.toast((res&&res.message)||'สำรองข้อมูลเมนูไม่สำเร็จ','error');if(done)done(false);return;}
+        var d=res.data||{};
+        App.ui.toast(d.created?'สำรองข้อมูลเมนูก่อนย้ายรูปแล้ว':'พบข้อมูลสำรองเดิมอยู่แล้ว','success');
+        if(done)done(true,d);
+      },{silent:true,noLoader:true,key:'backup_menu_before_migrate'});
+    },
+    _runMenuImageMigrationBatch:function(cursor,summary){
+      summary=summary||{total:0,doneCount:0,migrated:0,skipped:0,failed:0,failedItems:[],running:true};
+      var payload={limit:15,cursor:Math.max(0,parseInt(cursor||0,10)||0),force:false,dryRun:false};
+      App.api.call('migrateMenuImagesToDrive',[App.state.adminToken,payload],function(res){
+        if(App.admin._auth(res))return;
+        if(!res||!res.success){
+          summary.running=false;
+          summary.error=String((res&&res.message)||'ไม่ทราบสาเหตุ');
+          App.admin.renderMenuImageMigrationStatus(summary);
+          App.admin._menuImageMigrating=false;
+          var b0=document.getElementById('btn-migrate-menu-images');if(b0)App.ui.setBtn(b0,false,'ย้ายรูปเมนูเดิมเข้า Drive');
+          App.ui.toast('ย้ายรูปไม่สำเร็จ: '+String((res&&res.message)||'ไม่ทราบสาเหตุ'),'error');
+          return;
+        }
+        var d=res.data||{};
+        summary.total=parseInt(d.total||0,10)||0;
+        summary.migrated+=(parseInt(d.migrated||0,10)||0);
+        summary.skipped+=(parseInt(d.skipped||0,10)||0);
+        summary.failed+=(parseInt(d.failed||0,10)||0);
+        var backendProcessed=Math.max(0,parseInt(d.processed||0,10)||0);
+        if(backendProcessed>0)summary.doneCount=Math.min(summary.total,backendProcessed);
+        else summary.doneCount=Math.min(summary.total,summary.doneCount+(parseInt(d.migrated||0,10)||0)+(parseInt(d.skipped||0,10)||0)+(parseInt(d.failed||0,10)||0));
+        var results=Array.isArray(d.results)?d.results:[];
+        var last=results.length?results[results.length-1]:null;
+        summary.currentName=last?String(last.menuName||last.menuId||''):'';
+        results.forEach(function(x){
+          if(String(x&&x.status||'')==='failed'&&summary.failedItems.length<30){
+            var oldType='';
+            var oldUrl=String(x&&x.oldUrl||'');
+            if(!oldUrl)oldType='empty';
+            else if(/^data:image\//i.test(oldUrl))oldType='base64';
+            else if(/lh3\.googleusercontent\.com|drive\.google\.com/i.test(oldUrl))oldType='drive';
+            else oldType='url';
+            summary.failedItems.push({menuId:x.menuId,menuName:x.menuName,reason:'['+oldType+'] '+String(x.reason||'ไม่สำเร็จ')});
+          }
+        });
+        summary.running=!d.done;
+        App.admin.renderMenuImageMigrationStatus(summary);
+        if(d.done){
+          App.admin._menuImageMigrating=false;
+          var b1=document.getElementById('btn-migrate-menu-images');if(b1)App.ui.setBtn(b1,false,'ย้ายรูปเมนูเดิมเข้า Drive');
+          App.admin._invalidateCache(['menu','menu_data','menu_version']);
+          if(App.state.adminPage==='menu')App.admin.loadMenu();
+          App.state._menuLoaded=false;
+          var backupEl=document.getElementById('menu-image-backup-status');
+          if(backupEl)backupEl.textContent='Backup: '+(d.backupCreated?'สร้างแล้ว':'มีอยู่แล้ว');
+          App.ui.toast('ย้ายรูปเมนูเดิมเข้า Drive สำเร็จ','success');
+          return;
+        }
+        setTimeout(function(){
+          App.admin._runMenuImageMigrationBatch(parseInt(d.cursor||0,10)||0,summary);
+        },120);
+      },{silent:true,noLoader:true,key:'migrate_menu_images_'+String(cursor||0)});
+    },
+    migrateMenuImagesToDrive:function(){
+      if(!App.admin.ensureCanManageUsersApi())return;
+      if(!App.admin.ensureCanEdit())return;
+      var driveEl=document.getElementById('s-drive');
+      var folderId=driveEl?App.admin._normalizeGoogleDriveFolderInput(driveEl):'';
+      if(!folderId){App.ui.toast('ยังไม่ได้สร้างโฟลเดอร์ กรุณากดสร้างโฟลเดอร์อัตโนมัติก่อน','warn');return;}
+      if(App.admin._menuImageMigrating){App.ui.toast('กำลังย้ายรูปเมนูอยู่ กรุณารอสักครู่','warn');return;}
+      var btn=document.getElementById('btn-migrate-menu-images');
+      if(btn)App.ui.setBtn(btn,true,'⏳ กำลังย้าย...');
+      App.admin._menuImageMigrating=true;
+      var summary={total:0,doneCount:0,migrated:0,skipped:0,failed:0,failedItems:[],running:true,currentName:''};
+      App.admin.renderMenuImageMigrationStatus(summary);
+      App.admin.backupMenuBeforeImageMigration(function(ok){
+        if(!ok){
+          App.admin._menuImageMigrating=false;
+          if(btn)App.ui.setBtn(btn,false,'ย้ายรูปเมนูเดิมเข้า Drive');
+          return;
+        }
+        App.admin._runMenuImageMigrationBatch(0,summary);
+      });
+    },
+    verifyMigratedMenuImages:function(){
+      if(!App.admin.ensureCanManageUsersApi())return;
+      var sum={total:0,ok:0,skipped:0,broken:0,brokenItems:[],doneCount:0,running:true};
+      var run=function(cursor){
+        App.api.call('verifyMigratedMenuImages',[App.state.adminToken,{limit:20,cursor:Math.max(0,parseInt(cursor||0,10)||0)}],function(res){
+          if(App.admin._auth(res))return;
+          if(!res||!res.success){App.ui.toast((res&&res.message)||'ตรวจสอบรูปไม่สำเร็จ','error');return;}
+          var d=res.data||{};
+          if(!sum.total)sum.total=parseInt(d.total||0,10)||0;
+          sum.ok+=(parseInt(d.ok||0,10)||0);
+          sum.skipped+=(parseInt(d.skipped||0,10)||0);
+          sum.broken+=(parseInt(d.broken||0,10)||0);
+          sum.doneCount=Math.min(sum.total,sum.doneCount+(parseInt(d.ok||0,10)||0)+(parseInt(d.skipped||0,10)||0)+(parseInt(d.broken||0,10)||0));
+          (Array.isArray(d.results)?d.results:[]).forEach(function(x){
+            if(String(x&&x.status||'')==='broken'&&sum.brokenItems.length<50)sum.brokenItems.push({menuName:x.menuName,reason:x.reason});
+          });
+          var txt=document.getElementById('menu-image-verify-summary');
+          if(txt)txt.textContent='ตรวจสอบแล้ว '+sum.doneCount+'/'+sum.total+' | ปกติ '+sum.ok+' | ข้าม '+sum.skipped+' | รูปเสีย '+sum.broken;
+          if(d.done){
+            sum.running=false;
+            App.ui.toast(sum.broken>0?'ตรวจสอบเสร็จ พบรูปมีปัญหา':'ตรวจสอบรูปหลังย้ายเสร็จ (ผ่าน)','info');
+            App.admin._lastMigrationSummary=Object.assign({},App.admin._lastMigrationSummary||{},{
+              verifyOk:sum.ok,verifyBroken:sum.broken,failedItems:(App.admin._lastMigrationSummary&&App.admin._lastMigrationSummary.failedItems)||[]
+            });
+            return;
+          }
+          setTimeout(function(){run(parseInt(d.cursor||0,10)||0);},120);
+        },{silent:true,noLoader:true,key:'verify_migrated_menu_images_'+String(cursor||0)});
+      };
+      run(0);
+    },
+    checkRollbackCandidates:function(){
+      App.api.call('getMenuImageMigrationRollbackCandidates',[App.state.adminToken],function(res){
+        if(App.admin._auth(res))return;
+        if(!res||!res.success){App.ui.toast((res&&res.message)||'โหลดรายการ rollback ไม่สำเร็จ','error');return;}
+        var d=res.data||{};
+        var el=document.getElementById('menu-image-rollback-summary');
+        if(el)el.textContent='รายการที่ย้อนกลับได้: '+(parseInt(d.total||0,10)||0);
+      },{silent:true,noLoader:true,key:'rollback_candidates'});
+    },
+    rollbackMenuImagesLatest:function(){
+      App.ui.confirm('ยืนยันย้อนกลับลิงก์รูปเมนู? ระบบจะเปลี่ยน MENU.image กลับเป็นลิงก์เดิม แต่จะไม่ลบไฟล์ใหม่ใน Drive',function(){
+        App.api.call('rollbackMenuImageMigration',[App.state.adminToken,{mode:'last_migration',dryRun:false}],function(res){
+          if(App.admin._auth(res))return;
+          if(!res||!res.success){App.ui.toast((res&&res.message)||'ย้อนกลับไม่สำเร็จ','error');return;}
+          var d=res.data||{};
+          App.ui.toast('ย้อนกลับแล้ว '+(d.restored||0)+' รายการ','success');
+          App.admin._invalidateCache(['menu','menu_data','menu_version']);
+          if(App.state.adminPage==='menu')App.admin.loadMenu();
+        },{silent:true,noLoader:true,key:'rollback_menu_images_latest'});
+      },{
+        okText:'ยืนยันย้อนกลับ',
+        cancelText:'ยกเลิก',
+        icon:'warning'
+      });
+    },
+    migrateSheetBase64MenuImagesToDrive:function(){
+      if(!App.admin.ensureCanManageUsersApi())return;
+      if(!App.admin.ensureCanEdit())return;
+      var stat=document.getElementById('menu-base64-migrate-summary');
+      var run=function(cursor,acc){
+        acc=acc||{total:0,migrated:0,skipped:0,failed:0,doneCount:0};
+        App.api.call('migrateSheetBase64MenuImagesToDrive',[App.state.adminToken,{limit:10,cursor:Math.max(0,parseInt(cursor||0,10)||0),dryRun:false}],function(res){
+          if(App.admin._auth(res))return;
+          if(!res||!res.success){App.ui.toast((res&&res.message)||'ย้ายรูป base64 ไม่สำเร็จ','error');return;}
+          var d=res.data||{};
+          if(!acc.total)acc.total=parseInt(d.total||0,10)||0;
+          acc.migrated+=(parseInt(d.migrated||0,10)||0);
+          acc.skipped+=(parseInt(d.skipped||0,10)||0);
+          acc.failed+=(parseInt(d.failed||0,10)||0);
+          acc.doneCount=Math.min(acc.total,acc.doneCount+(parseInt(d.migrated||0,10)||0)+(parseInt(d.skipped||0,10)||0)+(parseInt(d.failed||0,10)||0));
+          if(stat)stat.textContent='ย้าย Base64 แล้ว '+acc.doneCount+'/'+acc.total+' | สำเร็จ '+acc.migrated+' | ข้าม '+acc.skipped+' | ไม่สำเร็จ '+acc.failed;
+          if(d.done){
+            App.ui.toast('ย้ายรูปที่เก็บใน Sheet เข้า Google Drive เสร็จแล้ว','success');
+            App.admin._invalidateCache(['menu','menu_data','menu_version']);
+            if(App.state.adminPage==='menu')App.admin.loadMenu();
+            return;
+          }
+          setTimeout(function(){run(parseInt(d.cursor||0,10)||0,acc);},120);
+        },{silent:true,noLoader:true,key:'migrate_sheet_base64_'+String(cursor||0)});
+      };
+      run(0);
+    },
+    verifyMenuImageStorage:function(){
+      if(!App.admin.ensureCanManageUsersApi())return;
+      App.api.call('verifyMenuImageStorage',[App.state.adminToken],function(res){
+        if(App.admin._auth(res))return;
+        if(!res||!res.success){App.ui.toast((res&&res.message)||'ตรวจสอบที่เก็บรูปเมนูไม่สำเร็จ','error');return;}
+        var d=res.data||{};
+        var txt='รูปใน Google Drive: '+(d.drive||0)+' | รูปยังอยู่ใน Sheet/Base64: '+(d.base64||0)+' | รูป URL ภายนอก: '+(d.external||0)+' | ไม่มีรูป: '+(d.empty||0);
+        var out=document.getElementById('menu-storage-verify-summary');
+        if(out)out.textContent=txt;
+        if((parseInt(d.base64||0,10)||0)>0)App.ui.toast('ยังมีรูปที่เก็บใน Sheet แนะนำให้กดย้ายเข้า Google Drive','warn');
+        else App.ui.toast('ตรวจสอบที่เก็บรูปเมนูเรียบร้อย','success');
+      },{silent:true,noLoader:true,key:'verify_menu_image_storage'});
     },
     _completeLogin:function(data,fallbackUser){
       var payload=data||{};
@@ -1595,13 +1981,16 @@ var App={
         });
       }
       App.admin.applyRolePermissions();
-      App.admin.applyAdminBrand(window._restaurantName||'FoodOrder',window._restaurantLogo||'');
+      var localBrand=App.admin._getBrandingCache();
+      if(localBrand){
+        App.admin.applyAdminBranding(localBrand);
+      }else{
+        App.admin.applyAdminBranding(App.state._settingsRaw||{restaurant_name:window._restaurantName||'FoodOrder',restaurant_logo:window._restaurantLogo||''});
+      }
       App.admin.toggleAdminMode(false);
-      App.api.silent('getSettings',[],function(res){
-        if(res&&res.success&&res.data){
-          App.state._settingsRaw=res.data||{};
-          App.state._deliveryCategoryType=App.admin._normalizeDeliveryType(res.data.delivery_category_type||'village');
-          App.state._deliveryNoteMode=(App.state._deliveryCategoryType==='village'?'address':'note');
+      App.admin.loadAdminRuntimeSettings(function(s){
+        if(s){
+          App.admin.applyAdminBranding(s);
           var typeSel=document.getElementById('s-delivery-type-select');
           var typeInp=document.getElementById('s-delivery-type');
           if(typeSel)typeSel.value=App.state._deliveryCategoryType;
@@ -1612,18 +2001,51 @@ var App={
       App.admin.renderPaperPresetOptions();
       App.ui.adminNav('orders');
     },
-    applyAdminBrand:function(name,logo){
-      var brandName=String(name||window._restaurantName||'FoodOrder');
-      var brandLogo=String(logo||'').trim();
-      var nameEl=document.getElementById('admin-sidebar-brand-name');
-      var logoEl=document.getElementById('admin-sidebar-logo');
-      if(nameEl)nameEl.textContent=brandName;
-      if(logoEl){
-        if(!brandLogo)logoEl.innerHTML='🍽';
-        else logoEl.innerHTML='<img src="'+App.u.esc(brandLogo)+'" alt="logo" onerror="this.parentNode.innerHTML=\'🍽\'">';
-      }
+    applyAdminBranding:function(settings){
+      settings=settings||{};
+      var brandName=String(settings.restaurant_name||window._restaurantName||'FoodOrder').trim()||'FoodOrder';
+      var brandLogo=String(settings.restaurant_logo||window._restaurantLogo||'').trim();
+      var fallback='<span class="admin-logo-fallback">🍽</span>';
+      var fadeTargets=[];
+      ['admin-sidebar-logo','admin-sidebar-brand-name','topbar-brand-logo'].forEach(function(id){
+        var n=document.getElementById(id);
+        if(n)fadeTargets.push(n);
+      });
+      document.querySelectorAll('#admin-app [data-admin-brand-name], #admin-app [data-admin-brand-logo]').forEach(function(n){
+        fadeTargets.push(n);
+      });
+      fadeTargets.forEach(function(n){n.classList.add('admin-brand-fade');});
+      var nameIds=['admin-sidebar-brand-name'];
+      nameIds.forEach(function(id){
+        var el=document.getElementById(id);
+        if(el)el.textContent=brandName;
+      });
+      document.querySelectorAll('#admin-app [data-admin-brand-name]').forEach(function(el){
+        el.textContent=brandName;
+      });
+      var logoIds=['admin-sidebar-logo','topbar-brand-logo'];
+      logoIds.forEach(function(id){
+        var el=document.getElementById(id);
+        if(!el)return;
+        if(!brandLogo){
+          el.innerHTML=fallback;
+          return;
+        }
+        el.innerHTML='<img src="'+App.u.esc(brandLogo)+'" alt="logo" onerror="this.outerHTML=\'<span class=&quot;admin-logo-fallback&quot;>🍽</span>\'">';
+      });
+      document.querySelectorAll('#admin-app [data-admin-brand-logo]').forEach(function(el){
+        if(!brandLogo){el.innerHTML=fallback;return;}
+        el.innerHTML='<img src="'+App.u.esc(brandLogo)+'" alt="logo" onerror="this.outerHTML=\'<span class=&quot;admin-logo-fallback&quot;>🍽</span>\'">';
+      });
       window._restaurantName=brandName;
       window._restaurantLogo=brandLogo;
+      App.admin._saveBrandingCache(brandName,brandLogo);
+      setTimeout(function(){
+        fadeTargets.forEach(function(n){n.classList.remove('admin-brand-fade');});
+      },170);
+    },
+    applyAdminBrand:function(name,logo){
+      App.admin.applyAdminBranding({restaurant_name:name,restaurant_logo:logo});
     },
     login(){
       if(App.u.debounce('login',2500))return;
@@ -1671,7 +2093,13 @@ var App={
     switchSettingsTab(btn,tabId){
       document.querySelectorAll('.stab').forEach(function(b){b.classList.remove('active');});
       document.querySelectorAll('.stab-panel').forEach(function(p){p.classList.remove('active');});
-      if(btn)btn.classList.add('active');var p=document.getElementById(tabId);if(p)p.classList.add('active');
+      if(btn)btn.classList.add('active');
+      var p=document.getElementById(tabId);
+      if(p)p.classList.add('active');
+      else{
+        try{console.warn('[Settings] panel not found:',tabId);}catch(_){}
+        return;
+      }
       // PERF-FIX: lazy-load heavy settings tabs only when opened
       if(tabId==='stab-users'){
         if(!App.admin.canManageUsersApi()){
@@ -2266,11 +2694,11 @@ var App={
         btn.classList.remove('loading');
       }
       App.admin._updateTestProgress(0,30,'พร้อมเริ่มทดสอบ');
-      if(m)m.classList.add('active');
+      if(m)App.admin.openAdminModal('test-orders-modal',{closeOnBackdrop:true});
     },
     closeTestOrdersModal:function(){
       var m=document.getElementById('test-orders-modal');
-      if(m)m.classList.remove('active');
+      if(m)App.admin.closeAdminModal('test-orders-modal');
     },
     onTestModeChanged:function(){
       var modeEl=document.getElementById('to-mode');
@@ -2424,10 +2852,33 @@ var App={
     loadPage(page){var map={menu:App.admin.loadMenu,topics:App.admin.loadTopics,promotions:App.admin.loadPromos,printing:App.admin.loadPrinting,notifications:App.admin.loadNotifications,settings:App.admin.loadSettings,orders:App.admin.loadOrders};if(map[page])map[page]();},
     loadPrinting:function(){
       App.admin._printingBusy=false;
+      App.admin._initStickerPreviewZoom();
+      App.admin.bindPrintingOrderChangeEvents();
       App.admin.printing.init();
       App.admin.switchPrintingTab(App.state.printing.tab||'receipt');
       App.admin._seedPrintingOrdersFromAdminCache();
-      App.admin.refreshPrintingData();
+      App.admin.refreshPrintingData({force:true});
+    },
+    invalidatePrintingCache:function(){
+      if(!App.state.printing)return;
+      App.state.printing.orders=[];
+      App.state.printing.queue=[];
+      App.state.printing.lastOrdersFetchAt=0;
+      App.state.printing.selected={sticker:{},receipt:{}};
+      App.admin._invalidateCache(['orders_list','printing_orders','print_queue']);
+    },
+    notifyOrdersChanged:function(reason){
+      App.admin.invalidatePrintingCache();
+      try{window.dispatchEvent(new CustomEvent('orders:changed',{detail:{reason:String(reason||'update')}}));}catch(_){}
+    },
+    bindPrintingOrderChangeEvents:function(){
+      if(App.admin._ordersChangedBound)return;
+      App.admin._ordersChangedBound=true;
+      window.addEventListener('orders:changed',function(){
+        var pg=document.getElementById('apg-printing');
+        if(pg&&pg.classList.contains('active'))App.admin.refreshPrintingData({force:true});
+        else App.admin.invalidatePrintingCache();
+      });
     },
     _seedPrintingOrdersFromAdminCache:function(){
       try{
@@ -2467,14 +2918,23 @@ var App={
         App.admin.loadPrintQueue();
       },10000);
     },
-    refreshPrintingData:function(){
-      App.admin.loadPrintingOrders();
+    refreshPrintingData:function(opts){
+      opts=opts||{};
+      App.admin.loadPrintingOrders({force:!!opts.force});
+      App.admin.loadPrintQueue({force:!!opts.force});
       App.admin.loadPrintTemplates();
       App.admin.printing.loadSettings();
+    },
+    handlePrintingRefreshClick:function(){
+      var btn=document.getElementById('printing-refresh-btn');
+      if(btn)App.ui.setBtn(btn,true,'กำลังรีเฟรช...');
+      App.admin.refreshPrintingData({force:true});
+      setTimeout(function(){if(btn)App.ui.setBtn(btn,false,'รีเฟรช');},700);
     },
     switchPrintingTab:function(tab){
       var t=(tab==='receipt')?'receipt':'sticker';
       App.state.printing.tab=t;
+      if(t==='sticker')App.admin._initStickerPreviewZoom();
       ['sticker','receipt'].forEach(function(k){
         var tb=document.getElementById('printdash-tab-'+k),pn=document.getElementById('printing-panel-'+k);
         if(tb)tb.classList.toggle('active',k===t);
@@ -2482,6 +2942,7 @@ var App={
       });
       App.admin.mountLegacyPrintBlocks(t);
       App.admin.renderPrintingOrders(t);
+      App.admin.applyStickerPreviewZoom();
     },
     loadPrintingOrders:function(opts){
       opts=opts||{};
@@ -2504,11 +2965,13 @@ var App={
         });
       }
       App.state.printing.ordersLoading=true;
-      App.api.call('getOrders',[{lite:true,page:1,pageSize:120},App.state.adminToken],function(res){
+      App.api.call('getOrders',[{lite:true,page:1,pageSize:120,forceRefresh:force,_force:force?Date.now():0},App.state.adminToken],function(res){
         App.state.printing.ordersLoading=false;
         if(App.admin._auth(res))return;
         if(!res||!res.success)return;
-        App.state.printing.orders=Array.isArray(res.data&&res.data.items)?res.data.items:[];
+        App.state.printing.orders=(Array.isArray(res.data&&res.data.items)?res.data.items:[]).filter(function(o){
+          return String(o&&o.status||'').toLowerCase()!=='cancelled';
+        });
         App.state.printing.lastOrdersFetchAt=Date.now();
         App.admin.renderPrintingOrders('sticker');
         App.admin.renderPrintingOrders('receipt');
@@ -2554,6 +3017,7 @@ var App={
       }
       body.innerHTML=pageRows.map(function(o){
         var oid=String(o&&o.id||'');
+        var sid=App.u.shortOrderId(oid);
         var checked=!!(App.state.printing.selected[tab]&&App.state.printing.selected[tab][oid]);
         var dt=o&&o.created_at?new Date(o.created_at):null;
         var t=(dt&&!isNaN(dt.getTime()))?dt.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'-';
@@ -2561,7 +3025,7 @@ var App={
         var badge='<span class="printdash-status '+(isPrinted?'printed':'pending')+'">'+(isPrinted?'พิมพ์แล้ว':'ยังไม่พิมพ์')+'</span>';
         return '<tr class="'+(checked?'printdash-row-selected':'')+'" onclick="App.admin.togglePrintSelectRow(\''+tab+'\',\''+oid+'\',event)">'
           +'<td><input type="checkbox" data-print-tab="'+tab+'" data-order-id="'+oid+'" '+(checked?'checked':'')+' onclick="event.stopPropagation()" onchange="App.admin.togglePrintSelectOne(this)"></td>'
-          +'<td>'+App.u.esc(oid)+'</td>'
+          +'<td title="'+App.u.esc(oid)+'">'+App.u.esc(sid)+'</td>'
           +'<td>'+App.u.esc(t)+'</td>'
           +'<td><span class="printdash-order-name '+(checked?'selected':'')+'">'+App.u.esc(o&&o.customer||'-')+'</span></td>'
           +'<td>'+App.u.esc(o&&o.department||'-')+'</td>'
@@ -2572,13 +3036,14 @@ var App={
       if(cards){
         cards.innerHTML=pageRows.map(function(o){
           var oid=String(o&&o.id||'');
+          var sid=App.u.shortOrderId(oid);
           var checked=!!(App.state.printing.selected[tab]&&App.state.printing.selected[tab][oid]);
           var dt=o&&o.created_at?new Date(o.created_at):null;
           var t=(dt&&!isNaN(dt.getTime()))?dt.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'-';
           var isPrinted=(parseInt(o&&o.printed_count||0,10)||0)>0;
           return '<div class="printdash-order-card '+(checked?'selected':'')+'" onclick="App.admin.togglePrintSelectRow(\''+tab+'\',\''+oid+'\',event)">'
             +'<div class="printdash-order-card-top"><label class="printdash-check"><input type="checkbox" data-print-tab="'+tab+'" data-order-id="'+oid+'" '+(checked?'checked':'')+' onclick="event.stopPropagation()" onchange="App.admin.togglePrintSelectOne(this)"> เลือก</label><span class="printdash-status '+(isPrinted?'printed':'pending')+'">'+(isPrinted?'พิมพ์แล้ว':'ยังไม่พิมพ์')+'</span></div>'
-            +'<div class="printdash-order-card-id">'+App.u.esc(oid)+'</div>'
+            +'<div class="printdash-order-card-id" title="'+App.u.esc(oid)+'">'+App.u.esc(sid)+'</div>'
             +'<div class="printdash-order-card-name '+(checked?'selected':'')+'">'+App.u.esc(o&&o.customer||'-')+'</div>'
             +'<div class="printdash-order-card-meta"><span>เวลา: '+App.u.esc(t)+'</span><span>ยอด: '+App.u.fmt(o&&o.total||0)+'</span><span style="grid-column:1 / -1">หมู่บ้าน/แผนก: '+App.u.esc(o&&o.department||'-')+'</span></div>'
             +'</div>';
@@ -2725,6 +3190,70 @@ var App={
         });
       }catch(_){}
     },
+    forceBatchPreviewWrap:function(){
+      var node=document.getElementById('batch-preview-content');
+      if(!node)return;
+      node.classList.add('batch-preview-content');
+      node.style.display='flex';
+      node.style.flexDirection='row';
+      node.style.flexWrap='wrap';
+      node.style.gap='16px';
+      node.style.justifyContent='flex-start';
+      node.style.alignItems='flex-start';
+      node.style.alignContent='flex-start';
+      node.style.width='100%';
+      node.style.maxWidth='100%';
+      node.style.minWidth='0';
+      Array.prototype.forEach.call(node.children||[],function(child){
+        try{
+          child.style.flex='0 0 auto';
+          child.style.maxWidth='100%';
+        }catch(_){}
+      });
+    },
+    _initStickerPreviewZoom:function(){
+      var z=160;
+      try{
+        var raw=localStorage.getItem('fo_sticker_preview_zoom');
+        var n=parseInt(raw,10);
+        if(n===100||n===125||n===150||n===160||n===175||n===200)z=n;
+      }catch(_){}
+      if(!App.state.printing)App.state.printing={};
+      App.state.printing.stickerPreviewZoom=z;
+      var el=document.getElementById('sticker-preview-zoom');
+      if(el)el.value=String(z);
+    },
+    applyStickerPreviewZoom:function(){
+      if(!App.state.printing)App.state.printing={};
+      var zoomEl=document.getElementById('sticker-preview-zoom');
+      var zoom=zoomEl?parseInt(zoomEl.value,10):(parseInt(App.state.printing.stickerPreviewZoom||160,10)||160);
+      if([100,125,150,160,175,200].indexOf(zoom)===-1)zoom=160;
+      App.state.printing.stickerPreviewZoom=zoom;
+      try{localStorage.setItem('fo_sticker_preview_zoom',String(zoom));}catch(_){}
+      if(zoomEl&&String(zoomEl.value)!==String(zoom))zoomEl.value=String(zoom);
+      var root=document.getElementById('batch-preview-content');
+      if(!root)return;
+      var z=zoom/100;
+      root.style.setProperty('--sticker-preview-zoom',String(z));
+      var applyNow=function(){
+        root.querySelectorAll('.print-preview-item.sticker-item,.sticker-preview,.sticker-preview-screen').forEach(function(el){
+          el.classList.add('sticker-preview-zoomed');
+          var box=el.querySelector('.sticker-preview-scale-box');
+          var inner=el.querySelector('.sticker-preview-scale-inner');
+          var sticker=inner&&inner.querySelector('.rp-sticker');
+          if(!box||!inner||!sticker)return;
+          var rect=sticker.getBoundingClientRect();
+          var bw=Math.max(140,Math.ceil((rect&&rect.width)||sticker.offsetWidth||220));
+          var bh=Math.max(80,Math.ceil((rect&&rect.height)||sticker.offsetHeight||120));
+          box.style.width=Math.ceil(bw*z)+'px';
+          box.style.height=Math.ceil(bh*z)+'px';
+          inner.style.transform='scale('+z+')';
+          inner.style.transformOrigin='top left';
+        });
+      };
+      applyNow();
+      requestAnimationFrame(applyNow);
+    },
     mountLegacyPrintBlocks:function(tab){
       try{
         App.admin._ensureLegacyPrintAnchors();
@@ -2741,15 +3270,13 @@ var App={
         if(prevNode&&prevHost&&prevNode.parentElement!==prevHost){
           prevHost.innerHTML='';
           prevHost.appendChild(prevNode);
-          prevNode.style.display='flex';
-          prevNode.style.flexDirection='column';
-          prevNode.style.flexWrap='nowrap';
-          prevNode.style.gap='10px';
         }
+        App.admin.forceBatchPreviewWrap();
         var modalSettingsWrap=document.getElementById('batch-receipt-settings');
         var modalStickerWrap=document.getElementById('batch-sticker-settings');
         if(modalSettingsWrap&&modalSettingsWrap.parentElement&&modalSettingsWrap.parentElement.id==='printing-legacy-settings-receipt'){modalSettingsWrap.style.display=(t==='receipt')?'':'none';}
         if(modalStickerWrap&&modalStickerWrap.parentElement&&modalStickerWrap.parentElement.id==='printing-legacy-settings-sticker'){modalStickerWrap.style.display=(t==='sticker')?'':'none';}
+        App.admin.applyStickerPreviewZoom();
         App.admin.updateBatchPreview();
       }catch(_){}
     },
@@ -2840,21 +3367,19 @@ var App={
         if(!ids.length){
           if(prevNode)prevNode.style.display='none';
           if(emptyNode)emptyNode.style.display='flex';
+          App.admin.applyStickerPreviewZoom();
           return;
         }
         if(emptyNode)emptyNode.style.display='none';
-        if(prevNode){
-          prevNode.style.display='flex';
-          prevNode.style.flexDirection='column';
-          prevNode.style.flexWrap='nowrap';
-          prevNode.style.gap='10px';
-        }
+        App.admin.forceBatchPreviewWrap();
         App.admin._prepareForcedBatchFilters();
         App.admin.updateBatchPreview();
+        App.admin.applyStickerPreviewZoom();
       }catch(_){}
     },
-    loadPrintQueue:function(){
-      App.api.call('getPrintJobs',[App.state.adminToken],function(res){
+    loadPrintQueue:function(opts){
+      opts=opts||{};
+      App.api.call('getPrintJobs',[App.state.adminToken,opts.force?{forceRefresh:true,_force:Date.now()}:{}],function(res){
         if(App.admin._auth(res))return;
         if(!res||!res.success)return;
         App.state.printing.queue=Array.isArray(res.data)?res.data:[];
@@ -2868,13 +3393,15 @@ var App={
       if(!rows.length){body.innerHTML='<tr><td colspan="7" class="text-sm text-muted" style="padding:20px;text-align:center">ยังไม่มีรายการในคิวพิมพ์</td></tr>';return;}
       body.innerHTML=rows.map(function(j){
         var id=String(j&&j.jobId||'');
+        var orderIds=Array.isArray(j&&j.orderIds)?j.orderIds:[];
+        var orderShort=orderIds.slice(0,3).map(function(oid){return App.u.shortOrderId(oid);}).join(', ');
         var pg=Math.max(0,Math.min(100,parseInt(j&&j.progress||0,10)||0));
         var st=String(j&&j.status||'pending');
         var dis=busy?' disabled':'';
         return '<tr>'
           +'<td>'+App.u.esc(id)+'</td>'
           +'<td>'+App.u.esc(j&&j.type||'receipt')+'</td>'
-          +'<td>'+App.u.esc(String(j&&j.total_items||0))+'</td>'
+          +'<td title="'+App.u.esc(orderIds.join(', '))+'">'+App.u.esc(String(j&&j.total_items||0))+(orderShort?('<div class="text-xs text-muted">'+App.u.esc(orderShort)+(orderIds.length>3?'...':'')+'</div>'):'')+'</td>'
           +'<td>'+App.u.esc(String(j&&j.created_at||''))+'</td>'
           +'<td><span class="printdash-status '+App.u.esc(st)+'">'+App.u.esc(st)+'</span></td>'
           +'<td><div class="printdash-queue-progress"><div class="printdash-queue-track"><div class="printdash-queue-fill" style="width:'+pg+'%"></div></div><span>'+pg+'%</span></div></td>'
@@ -3573,7 +4100,7 @@ var App={
       }else{
         App.admin.renderMenuTopicsSelector(item?item.id:null, item?item.topic_ids:null);
       }
-      document.getElementById('menu-modal').classList.add('active');
+      App.admin.openAdminModal('menu-modal',{closeOnBackdrop:false});
     },
 
     // ── IMAGE / CROP ────────────────────────────────────────────
@@ -3778,34 +4305,49 @@ var App={
         successMsg:'✅ บันทึกเมนูแล้ว',modalId:'menu-modal',modalCloseDelay:600,
         onSuccess:function(){App.state._menuLoaded=false;App.admin._invalidateCache('menu');App.admin.loadMenu();}
       },function(done){
-        var doSave=function(finalUrl){
-          var data={id:id,name:name,price:price,stock:(String(stockRaw||'').trim()===''?'':parseInt(stockRaw,10)),category:document.getElementById('mf-category').value,image:finalUrl,status:document.getElementById('mf-status').value,topic_ids:JSON.stringify(selectedTopics)};
-          App.api.call('adminCRUDMenu',[id?'update':'insert',data,App.state.adminToken],function(res){
+        var existing=(App.state.adminMenuItems||[]).find(function(x){return String(x&&x.id||'')===String(id||'');})||null;
+        var data={id:id,name:name,price:price,stock:(String(stockRaw||'').trim()===''?'':parseInt(stockRaw,10)),category:document.getElementById('mf-category').value,image:(b64&&/^data:image\//i.test(String(b64||'')))?String(b64):imgUrl,status:document.getElementById('mf-status').value,topic_ids:JSON.stringify(selectedTopics)};
+        App.admin.prepareMenuImageForSave(data,existing).then(function(prep){
+          if(!prep||!prep.success){done({success:false,message:(prep&&prep.message)||'เตรียมรูปเมนูไม่สำเร็จ'});return;}
+          App.api.call('adminCRUDMenu',[id?'update':'insert',prep.payload,App.state.adminToken],function(res){
             if(App.admin._auth(res))return;
             done(res);
           });
-        };
-        if(b64&&b64.startsWith('data:image')){
-          App.api.silent('getSettings',[],function(cfgRes){
-            var drv=cfgRes&&cfgRes.success&&cfgRes.data?String(cfgRes.data.drive_folder_id||'').trim():'';
-            if(!drv){
-              if(String(b64).length>49000){
-                done({success:false,message:'รูปใหญ่เกินไป กรุณาตั้งค่า Google Drive Folder ID ก่อนอัปโหลดรูป'});
-                return;
-              }
-              doSave(b64);
-              return;
-            }
-            App.ui.toast('⏳ กำลังอัพโหลดรูป...','info');
-            var mimeType=b64.split(';')[0].split(':')[1]||'image/jpeg';
-            var rawB64=b64.split(',')[1]||'';
-            App.api.call('uploadImageToDrive',[rawB64,'menu_'+Date.now()+'.jpg',mimeType,App.state.adminToken],function(res){
-              if(res&&res.success&&res.data&&res.data.url){doSave(res.data.url);}
-              else{done(res||{success:false,message:'อัพโหลดรูปไม่ได้'});}
-            },{key:'imgupload'});
-          });
-        }else{doSave(imgUrl);}
+        }).catch(function(e){
+          done({success:false,message:String((e&&e.message)||'เตรียมรูปเมนูไม่สำเร็จ')});
+        });
       });
+    },
+    prepareMenuImageForSave:async function(payload,oldMenu){
+      payload=payload||{};
+      var img=String(payload.image||'').trim();
+      if(!img)return {success:true,payload:payload};
+      if(!/^data:image\//i.test(img))return {success:true,payload:payload};
+      var settings=App.state._settingsRaw||{};
+      var driveId=String(settings.drive_folder_id||'').trim();
+      if(!driveId){
+        var cfg=await App.api.callAsync('getSettings',[App.state.adminToken],{silent:true,noLoader:true});
+        if(cfg&&cfg.success&&cfg.data){
+          settings=cfg.data||{};
+          App.state._settingsRaw=settings;
+          driveId=String(settings.drive_folder_id||'').trim();
+        }
+      }
+      if(!driveId){
+        return {success:false,message:'กรุณาสร้างโฟลเดอร์ Google Drive จากหน้า ตั้งค่า > API ก่อนอัปโหลดรูปเมนู'};
+      }
+      var ext='jpg';
+      var mm=img.match(/^data:image\/([a-zA-Z0-9.+-]+);base64,/i);
+      if(mm&&mm[1])ext=String(mm[1]).toLowerCase().replace('jpeg','jpg');
+      var fname='menu_'+String(payload.id||Date.now())+'_'+String(payload.name||'image').replace(/\s+/g,'_').replace(/[^a-zA-Z0-9ก-๙_-]/g,'').substring(0,40)+'.'+ext;
+      var up=await App.api.callAsync('uploadImageToDrive',[img,fname,App.state.adminToken,{source:'menu_save'}],{loaderText:'กำลังอัปโหลดรูปเข้า Google Drive...'});
+      if(!up||!up.success||!up.data||!(up.data.url||up.data.lh3Url)){
+        if(oldMenu&&oldMenu.image)payload.image=String(oldMenu.image||'');
+        return {success:false,message:(up&&up.message)||'อัปโหลดรูปเข้า Google Drive ไม่สำเร็จ กรุณาตรวจสอบสิทธิ์ Drive'};
+      }
+      payload.image=String(up.data.url||up.data.lh3Url||'').trim();
+      if(up.data.fileId)payload.image_file_id=String(up.data.fileId||'');
+      return {success:true,payload:payload};
     },
     renderMenuTopicsSelector(menuId,topicIdsJson){
       var wrap=document.getElementById('mf-topics-list');if(!wrap)return;
@@ -3903,7 +4445,7 @@ var App={
         if(typeof c==='string')return{label:c,price:0};
         return{label:String(c.label||c.name||c),price:toNum(c.price||0)};
       });
-      App.admin.renderTopicChoices();document.getElementById('tf-choice-input').value='';document.getElementById('topic-modal').classList.add('active');
+      App.admin.renderTopicChoices();document.getElementById('tf-choice-input').value='';App.admin.openAdminModal('topic-modal',{closeOnBackdrop:false});
     },
     renderTopicChoices(){var list=document.getElementById('tf-choices-list');if(!list)return;var e=App.u.esc;list.innerHTML=App.state._topicChoices.map(function(c,i){var label=typeof c==='string'?c:c.label;var price=typeof c==='object'?toNum(c.price||0):0;return'<span class="choice-tag">'+e(label)+(price>0?' <small style="color:var(--primary)">+'+price+'฿</small>':'')+'<span class="remove-choice" onclick="App.admin.removeTopicChoice('+i+')" title="ลบ">×</span></span>';}).join('');},
     addTopicChoice(){var inp=document.getElementById('tf-choice-input'),priceInp=document.getElementById('tf-choice-price');if(!inp)return;var val=inp.value.trim();var price=toNum(priceInp?priceInp.value:0);if(!val){App.ui.toast('กรุณากรอกชื่อตัวเลือก','error');return;}var exists=App.state._topicChoices.some(function(c){return(typeof c==='string'?c:c.label)===val;});if(exists){App.ui.toast('มีตัวเลือกนี้แล้ว','warn');return;}App.state._topicChoices.push({label:val,price:price});inp.value='';if(priceInp)priceInp.value='';App.admin.renderTopicChoices();},
@@ -3954,7 +4496,7 @@ var App={
       if(!App.state.adminPromos.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text2)">ไม่มีโปรโมชัน</td></tr>';return;}
       tb.innerHTML=App.state.adminPromos.map(function(p,idx){return'<tr><td><span class="badge badge-paid">'+(p.type==='qty'?'จำนวน':'ยอดใช้จ่าย')+'</span></td><td>'+e(p.threshold)+(p.type==='qty'?' รายการ':' บาท')+'</td><td>ลด '+e(p.discount)+' บาท</td><td>'+e(p.description||'-')+'</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-secondary" style="padding:6px 12px;font-size:13px" onclick="App.admin.openPromoEdit('+idx+')">แก้ไข</button><button class="btn" style="padding:6px 12px;font-size:13px;background:var(--primary-light);color:var(--primary)" onclick="App.admin.delPromo(\''+e(p.id||'')+'\')">ลบ</button></div></td></tr>';}).join('');
     },
-    openPromoEdit(idx){var p=typeof idx==='number'?App.state.adminPromos[idx]||null:null;var setVal=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};setVal('pf-id',p?p.id:'');setVal('pf-type',p?p.type:'qty');setVal('pf-threshold',p?p.threshold:'');setVal('pf-discount',p?p.discount:'');setVal('pf-desc',p?p.description:'');setVal('pf-status',p?p.status:'active');document.getElementById('promo-modal').classList.add('active');},
+    openPromoEdit(idx){var p=typeof idx==='number'?App.state.adminPromos[idx]||null:null;var setVal=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};setVal('pf-id',p?p.id:'');setVal('pf-type',p?p.type:'qty');setVal('pf-threshold',p?p.threshold:'');setVal('pf-discount',p?p.discount:'');setVal('pf-desc',p?p.description:'');setVal('pf-status',p?p.status:'active');App.admin.openAdminModal('promo-modal',{closeOnBackdrop:true});},
     savePromo(){
       if(!App.admin.ensureCanEdit())return;
       var id=document.getElementById('pf-id').value,threshold=document.getElementById('pf-threshold').value,discount=document.getElementById('pf-discount').value;
@@ -4049,7 +4591,7 @@ var App={
         var hasGuest=(App.state.adminUsers||[]).some(function(x){return String(x.username||'').toLowerCase()==='guest'||String(x.role||'')==='guest';});
         roleEl.querySelectorAll('option[value="guest"]').forEach(function(op){op.disabled=hasGuest;});
       }
-      document.getElementById('user-modal').classList.add('active');
+      App.admin.openAdminModal('user-modal',{closeOnBackdrop:true});
     },
     saveUser(){
       if(!App.admin.ensureCanManageUsersApi())return;
@@ -4093,7 +4635,15 @@ var App={
         var ppTog=document.getElementById('s-promptpay-enabled');if(ppTog)ppTog.checked=App.state._promptpayEnabled;
         var cashTog=document.getElementById('s-cash-enabled');if(cashTog)cashTog.checked=App.state._cashPaymentEnabled;
         var bankTog=document.getElementById('s-bank-enabled');if(bankTog)bankTog.checked=App.state._bankPaymentEnabled;
-        setVal('s-slipok',s.slipok_api_key);setVal('s-branch',s.slipok_branch_id);setVal('s-drive',App.admin._extractGoogleDriveResourceId(s.drive_folder_id));
+        var driveId=App.admin._extractGoogleDriveResourceId(s.drive_folder_id);
+        setVal('s-slipok',s.slipok_api_key);setVal('s-branch',s.slipok_branch_id);setVal('s-drive',driveId);
+        var driveInput=document.getElementById('s-drive');if(driveInput)driveInput.readOnly=true;
+        App.admin.renderDriveFolderStatus({
+          folderId:driveId,
+          folderName:String(s.drive_folder_name||''),
+          folderUrl:driveId?('https://drive.google.com/drive/folders/'+driveId):'',
+          exists:!!driveId
+        });
         App.customer.applyBrand(s.restaurant_name,s.restaurant_logo);
         App.admin.applyAdminBrand(s.restaurant_name,s.restaurant_logo);
         App.state._storeLogoB64=null;
@@ -4139,6 +4689,7 @@ var App={
       setVal('n-line-target-id',s.notification_line_target_id||'');
       setVal('n-telegram-token',s.notification_telegram_bot_token_masked||'');
       setVal('n-telegram-chat-id',s.notification_telegram_chat_id||'');
+      setChecked('n-include-admin-link',s.notification_include_admin_link||'0');
       App.admin.toggleNotificationChannel('line');
       App.admin.toggleNotificationChannel('telegram');
       App.admin.updateNotificationStatusBadges();
@@ -4189,11 +4740,11 @@ var App={
       if(!m||!intro||!steps)return;
       intro.classList.remove('hidden');
       steps.classList.add('hidden');
-      m.classList.add('active');
+      App.admin.openAdminModal('line-setup-modal',{closeOnBackdrop:true});
     },
     closeLineSetupGuide:function(){
       var m=document.getElementById('line-setup-modal');
-      if(m)m.classList.remove('active');
+      if(m)App.admin.closeAdminModal('line-setup-modal');
     },
     lineGuideStartSetup:function(){
       var intro=document.getElementById('line-guide-intro');
@@ -4330,7 +4881,8 @@ var App={
         notification_line_target_id:gv('n-line-target-id'),
         notification_telegram_enabled:gc('n-telegram-enabled')?'1':'0',
         notification_telegram_bot_token:gv('n-telegram-token'),
-        notification_telegram_chat_id:gv('n-telegram-chat-id')
+        notification_telegram_chat_id:gv('n-telegram-chat-id'),
+        notification_include_admin_link:gc('n-include-admin-link')?'1':'0'
       };
     },
     saveNotificationSettings:function(){
@@ -4479,7 +5031,13 @@ var App={
     testGoogleDriveConnection:function(){
       if(!App.admin.ensureCanManageUsersApi())return;
       var driveEl=document.getElementById('s-drive');
+      var statusEl=document.getElementById('api-drive-folder-status');
       var folderId=driveEl?App.admin._normalizeGoogleDriveFolderInput(driveEl):'';
+      if(!folderId){
+        App.admin._setApiCheckStatus('api-drive-status','⚠️ ยังไม่ได้สร้างโฟลเดอร์ กรุณากดสร้างโฟลเดอร์อัตโนมัติก่อน','warn');
+        if(statusEl)statusEl.textContent='ยังไม่ได้สร้างโฟลเดอร์';
+        return;
+      }
       App.admin._setApiCheckStatus('api-drive-status','กำลังตรวจสอบ Google Drive...','info');
       var btn=document.getElementById('btn-test-drive');
       if(btn)App.ui.setBtn(btn,true,'⏳ กำลังตรวจสอบ...');
@@ -4489,80 +5047,218 @@ var App={
         if(res&&res.success){
           var data=res.data||{};
           var m=data.message||'เชื่อมต่อ Google Drive สำเร็จ';
+          if(driveEl&&data.folderId)driveEl.value=String(data.folderId||'');
+          App.admin.renderDriveFolderStatus({
+            folderId:String(data.folderId||folderId),
+            folderName:String(data.folderName||''),
+            folderUrl:String(data.folderUrl||''),
+            exists:true
+          });
+          if(statusEl)statusEl.textContent='พร้อมใช้งาน';
           App.admin._setApiCheckStatus('api-drive-status','✅ '+m,'success');
           App.admin._showDriveEditorReminder();
           return;
         }
+        var code=String(res&&res.code||'');
+        if(code==='DRIVE_FOLDER_NOT_FOUND'&&driveEl){
+          driveEl.value='';
+          App.admin.renderDriveFolderStatus({exists:false});
+        }else if(statusEl)statusEl.textContent='ตรวจสอบไม่ผ่าน';
         App.admin._setApiCheckStatus('api-drive-status','❌ '+String((res&&res.message)||'ตรวจสอบไม่สำเร็จ'),'error');
         App.admin._showDriveEditorReminder();
       },{silent:true});
     },
-    saveSettings(){
+    createMenuImageFolder:function(){
+      if(!App.admin.ensureCanManageUsersApi())return;
       if(!App.admin.ensureCanEdit())return;
-      var getVal=function(id){var el=document.getElementById(id);return el?el.value:'';};
-      var openStart=getVal('s-open-start'),openEnd=getVal('s-open-end');
-      if((openStart&&!openEnd)||(!openStart&&openEnd)){App.ui.toast('กรุณาระบุช่วงเวลาเปิดให้ครบทั้งเริ่มและสิ้นสุด','error');return;}
-      if(openStart&&openEnd&&new Date(openStart)>new Date(openEnd)){App.ui.toast('วันเวลาเริ่มต้องไม่มากกว่าวันเวลาสิ้นสุด','error');return;}
-      var promptpayEnabled=!!(document.getElementById('s-promptpay-enabled')&&document.getElementById('s-promptpay-enabled').checked);
-      var cashEnabled=!!(document.getElementById('s-cash-enabled')&&document.getElementById('s-cash-enabled').checked);
-      var bankEnabled=!!(document.getElementById('s-bank-enabled')&&document.getElementById('s-bank-enabled').checked);
-      var promptpayNumber=App.u.digitsOnly(getVal('s-pp')||'');
-      if(!promptpayEnabled&&!cashEnabled&&!bankEnabled){App.ui.toast('ต้องเปิดใช้งานการชำระเงินอย่างน้อย 1 วิธี','error');return;}
-      if(promptpayEnabled&&!promptpayNumber){App.ui.toast('หากเปิดใช้ PromptPay กรุณากรอกเลข PromptPay','error');return;}
-      if(promptpayEnabled&&!App.u.isValidPromptPayId(promptpayNumber)){App.ui.toast('เลข PromptPay ต้องเป็นมือถือ 10 หลัก หรือบัตรประชาชน 13 หลัก','error');return;}
-      var promptpayEl=document.getElementById('s-pp');if(promptpayEl)promptpayEl.value=promptpayNumber;
-      var logoVal=App.state._storeLogoB64||getVal('s-logo');
-      var deliveryType=getVal('s-delivery-type-select')||getVal('s-delivery-type')||'village';
-      var deliveryNoteMode=(String(deliveryType)==='village'?'address':'note');
+      var btn=document.getElementById('btn-create-drive-folder');
       var driveEl=document.getElementById('s-drive');
-      var driveFolderId=driveEl?App.admin._normalizeGoogleDriveFolderInput(driveEl):'';
-      var data={restaurant_name:getVal('s-name'),restaurant_logo:logoVal,departments:getVal('s-depts'),delivery_category_type:deliveryType,delivery_note_mode:deliveryNoteMode,promptpay:promptpayNumber,promptpay_enabled:promptpayEnabled?'1':'0',payee_name:getVal('s-payee'),payment_timeout:getVal('s-timeout'),cash_payment_enabled:cashEnabled?'1':'0',bank_payment_enabled:bankEnabled?'1':'0',slipok_api_key:getVal('s-slipok'),slipok_branch_id:getVal('s-branch'),drive_folder_id:driveFolderId,payment_banks:JSON.stringify(App.state._banks)};
-      if(App.admin.isStaff()){
+      var nameEl=document.getElementById('s-drive-folder-name');
+      var statusEl=document.getElementById('api-drive-folder-status');
+      var folderName=String(nameEl&&nameEl.value||'FoodOrder Menu Images').trim()||'FoodOrder Menu Images';
+      if(btn)App.ui.setBtn(btn,true,'⏳ กำลังสร้าง...');
+      if(statusEl)statusEl.textContent='กำลังสร้างโฟลเดอร์...';
+      App.api.call('createMenuImageFolder',[folderName,App.state.adminToken],function(res){
+        if(btn)App.ui.setBtn(btn,false,'สร้างโฟลเดอร์อัตโนมัติ');
+        if(App.admin._auth(res))return;
+        if(!res||!res.success){
+          if(statusEl)statusEl.textContent='ตรวจสอบไม่ผ่าน';
+          App.ui.toast((res&&res.message)||'สร้างโฟลเดอร์ไม่สำเร็จ','error');
+          return;
+        }
+        var d=res.data||{};
+        var folderId=String(d.folderId||'').trim();
+        if(driveEl&&folderId)driveEl.value=folderId;
+        App.admin.renderDriveFolderStatus({
+          folderId:folderId,
+          folderName:String(d.folderName||folderId||'-'),
+          folderUrl:String(d.folderUrl||''),
+          exists:true
+        });
+        App.admin._setApiCheckStatus('api-drive-status','✅ ตรวจสอบผ่าน','success');
+        App.ui.toast('สร้างโฟลเดอร์และบันทึกค่าแล้ว','success');
+        if(folderId){
+          App.api.call('saveSettingsPartial',[{drive_folder_id:folderId},App.state.adminToken],function(){},{silent:true,noLoader:true,key:'save_drive_partial'});
+        }
+        App.admin.confirmMigrateMenuImagesAfterFolderCreate(d);
+      },{silent:true,key:'create_drive_folder'});
+    },
+    collectSettingsByTab:function(tabName){
+      var t=String(tabName||'').toLowerCase();
+      var getVal=function(id){var el=document.getElementById(id);return el?el.value:'';};
+      var out={};
+      if(t==='store'){
+        out.restaurant_name=getVal('s-name');
+        out.restaurant_logo=App.state._storeLogoB64||getVal('s-logo');
+        return out;
+      }
+      if(t==='order-info'){
+        var deliveryType=getVal('s-delivery-type-select')||getVal('s-delivery-type')||'village';
+        out.departments=getVal('s-depts');
+        out.delivery_category_type=deliveryType;
+        out.delivery_note_mode=(String(deliveryType)==='village'?'address':'note');
+        return out;
+      }
+      if(t==='payment'){
+        var promptpayEnabled=!!(document.getElementById('s-promptpay-enabled')&&document.getElementById('s-promptpay-enabled').checked);
+        var cashEnabled=!!(document.getElementById('s-cash-enabled')&&document.getElementById('s-cash-enabled').checked);
+        var bankEnabled=!!(document.getElementById('s-bank-enabled')&&document.getElementById('s-bank-enabled').checked);
+        var promptpayNumber=App.u.digitsOnly(getVal('s-pp')||'');
+        var promptpayEl=document.getElementById('s-pp');if(promptpayEl)promptpayEl.value=promptpayNumber;
+        out.promptpay=promptpayNumber;
+        out.promptpay_enabled=promptpayEnabled?'1':'0';
+        out.payee_name=getVal('s-payee');
+        out.payment_timeout=getVal('s-timeout');
+        out.cash_payment_enabled=cashEnabled?'1':'0';
+        out.bank_payment_enabled=bankEnabled?'1':'0';
+        out.payment_banks=JSON.stringify(App.state._banks||[]);
+        out.slipok_api_key=getVal('s-slipok');
+        out.slipok_branch_id=getVal('s-branch');
+        return out;
+      }
+      if(t==='api'){
+        var driveEl=document.getElementById('s-drive');
+        var driveFolderId=driveEl?App.admin._normalizeGoogleDriveFolderInput(driveEl):'';
+        out.drive_folder_id=driveFolderId;
+        return out;
+      }
+      if(t==='shop-hours'){
+        var openStart=getVal('s-open-start'),openEnd=getVal('s-open-end');
+        out.shop_open_range=JSON.stringify({start:openStart||'',end:openEnd||''});
+        out.shop_open=document.getElementById('shop-open-toggle')&&document.getElementById('shop-open-toggle').checked?'1':'0';
+        return out;
+      }
+      if(t==='printing'){
+        out.print_method='browser';
+        out.bluetooth_auto_connect='0';
+        return out;
+      }
+      if(t==='all'){
+        var merged={};
+        ['store','order-info','payment','api','shop-hours','printing'].forEach(function(k){
+          var d=App.admin.collectSettingsByTab(k)||{};
+          Object.keys(d).forEach(function(key){merged[key]=d[key];});
+        });
+        return merged;
+      }
+      return {};
+    },
+    invalidateSettingsAfterSave:function(tabName){
+      var t=String(tabName||'').toLowerCase();
+      App.admin._invalidateCache('settings');
+      if(t==='store'||t==='payment')App.state._menuLoaded=false;
+      if(t==='store'||t==='order-info'||t==='payment'||t==='api'||t==='shop-hours'){
+        App.admin.loadSettings(true);
+      }
+    },
+    _saveSettingsData:function(data,opts){
+      opts=opts||{};
+      App.api.call('saveSettings',[data,App.state.adminToken],function(res){
+        if(App.admin._auth(res))return;
+        if(opts.done)opts.done(res);
+      });
+    },
+    saveSettingsTab:function(tabName){
+      if(!App.admin.ensureCanEdit())return;
+      var tab=String(tabName||'').toLowerCase();
+      if(tab==='api'&&!App.admin.ensureCanManageUsersApi())return;
+      var data=App.admin.collectSettingsByTab(tab);
+      if(tab==='payment'){
+        var promptpayEnabled=String(data.promptpay_enabled||'0')==='1';
+        var cashEnabled=String(data.cash_payment_enabled||'0')==='1';
+        var bankEnabled=String(data.bank_payment_enabled||'0')==='1';
+        if(!promptpayEnabled&&!cashEnabled&&!bankEnabled){App.ui.toast('ต้องเปิดใช้งานการชำระเงินอย่างน้อย 1 วิธี','error');return;}
+        if(promptpayEnabled&&!data.promptpay){App.ui.toast('หากเปิดใช้ PromptPay กรุณากรอกเลข PromptPay','error');return;}
+        if(promptpayEnabled&&!App.u.isValidPromptPayId(data.promptpay)){App.ui.toast('เลข PromptPay ต้องเป็นมือถือ 10 หลัก หรือบัตรประชาชน 13 หลัก','error');return;}
+      }
+      if(tab==='shop-hours'){
+        var range={};try{range=JSON.parse(data.shop_open_range||'{}');}catch(_){range={};}
+        var openStart=String(range.start||''),openEnd=String(range.end||'');
+        if((openStart&&!openEnd)||(!openStart&&openEnd)){App.ui.toast('กรุณาระบุช่วงเวลาเปิดให้ครบทั้งเริ่มและสิ้นสุด','error');return;}
+        if(openStart&&openEnd&&new Date(openStart)>new Date(openEnd)){App.ui.toast('วันเวลาเริ่มต้องไม่มากกว่าวันเวลาสิ้นสุด','error');return;}
+      }
+      if(tab==='api'&&App.admin.isStaff()){
         var raw=App.state._settingsRaw||{};
         data.slipok_api_key=String(raw.slipok_api_key||'');
         data.slipok_branch_id=String(raw.slipok_branch_id||'');
         data.drive_folder_id=String(raw.drive_folder_id||'');
       }
-      data.shop_open_range=JSON.stringify({start:openStart||'',end:openEnd||''});
-      data.shop_open=document.getElementById('shop-open-toggle')&&document.getElementById('shop-open-toggle').checked?'1':'0';
-      App.u.btnAction({
-        debounceKey:'savesettings',debounceMs:2000,
-        btnId:'save-settings-btn',loadingText:'⏳ กำลังบันทึก...',successText:'บันทึกการตั้งค่า',
-        successMsg:'✅ บันทึกการตั้งค่าแล้ว',
-        onSuccess:function(){App.state._menuLoaded=false;App.admin._invalidateCache(['settings','menu']);App.admin.loadSettings(true);}
-      },function(done){
-        var commitSave=function(finalLogo){
-          data.restaurant_logo=finalLogo;
-          App.api.call('saveSettings',[data,App.state.adminToken],function(res){
-            if(App.admin._auth(res))return;
+      var btnMap={
+        'store':'save-settings-store-btn',
+        'order-info':'save-settings-order-info-btn',
+        'payment':'save-settings-payment-btn',
+        'api':'save-settings-api-btn',
+        'shop-hours':'save-settings-shop-hours-btn',
+        'printing':'save-settings-printing-btn',
+        'all':'save-settings-btn'
+      };
+      var btnId=btnMap[tab]||'save-settings-btn';
+      var commit=function(finalData){
+        App.u.btnAction({
+          debounceKey:'savesettings_'+tab,debounceMs:2000,
+          btnId:btnId,loadingText:'⏳ กำลังบันทึก...',successText:'บันทึก',
+          successMsg:'✅ บันทึกการตั้งค่าแล้ว',
+          onSuccess:function(){App.admin.invalidateSettingsAfterSave(tab);}
+        },function(done){
+          App.admin._saveSettingsData(finalData,{done:function(res){
             if(res&&res.success){
-              App.state._storeLogoB64=null;
-              App.state._storeLogoSrcUrl=String(finalLogo||'');
+              var merged=Object.assign({},App.state._settingsRaw||{},finalData||{});
+              App.state._settingsRaw=merged;
+              if(tab==='store'){
+                App.admin.applyAdminBranding(merged);
+                App.customer.applyBrand(merged.restaurant_name,merged.restaurant_logo);
+              }
             }
             done(res);
-          });
-        };
-        var logoRaw=String(logoVal||'');
+          }});
+        });
+      };
+      if(tab==='store'){
+        var logoRaw=String(data.restaurant_logo||'');
         var isDataLogo=(logoRaw.indexOf('data:image')===0);
-        if(!isDataLogo){
-          commitSave(logoRaw);
+        if(isDataLogo){
+          var mimeType=logoRaw.split(';')[0].split(':')[1]||'image/jpeg';
+          var rawB64=logoRaw.split(',')[1]||'';
+          if(!rawB64){App.ui.toast('ข้อมูลโลโก้ไม่ถูกต้อง กรุณาเลือกไฟล์ใหม่','error');return;}
+          App.ui.toast('⏳ กำลังอัปโหลดโลโก้ร้าน...','info');
+          App.api.call('uploadImageToDrive',[rawB64,'logo_'+Date.now()+'.jpg',mimeType,App.state.adminToken],function(upRes){
+            if(upRes&&upRes.success&&upRes.data&&upRes.data.url){
+              data.restaurant_logo=String(upRes.data.url||'');
+              App.state._storeLogoB64=null;
+              App.state._storeLogoSrcUrl=data.restaurant_logo;
+              commit(data);
+              return;
+            }
+            App.ui.toast((upRes&&upRes.message)||'อัปโหลดโลโก้ไม่สำเร็จ','error');
+          },{key:'logo_upload'});
           return;
         }
-        var mimeType=logoRaw.split(';')[0].split(':')[1]||'image/jpeg';
-        var rawB64=logoRaw.split(',')[1]||'';
-        if(!rawB64){
-          done({success:false,message:'ข้อมูลโลโก้ไม่ถูกต้อง กรุณาเลือกไฟล์ใหม่'});
-          return;
-        }
-        App.ui.toast('⏳ กำลังอัปโหลดโลโก้ร้าน...','info');
-        App.api.call('uploadImageToDrive',[rawB64,'logo_'+Date.now()+'.jpg',mimeType,App.state.adminToken],function(upRes){
-          if(upRes&&upRes.success&&upRes.data&&upRes.data.url){
-            commitSave(String(upRes.data.url||''));
-            return;
-          }
-          done(upRes||{success:false,message:'อัปโหลดโลโก้ไม่สำเร็จ'});
-        },{key:'logo_upload'});
-      });
+      }
+      commit(data);
+    },
+    saveSettings:function(){
+      // compatibility wrapper: เดิมเป็นปุ่มบันทึกรวมทั้งหมด
+      App.admin.saveSettingsTab('all');
     },
     saveShopAvailability:function(opts){
       opts=opts||{};
@@ -4725,7 +5421,7 @@ var App={
         var logoHtml2=App.admin._bankIconHtml(b,26);
         return'<button class="bank-btn'+(bank&&bank.code===b.code?' selected':'')+'\" onclick=\"App.admin.selectBank(\''+b.code+'\',\''+b.name+'\',this)\"><span style="display:block;margin:0 auto 4px;width:26px;height:26px">'+logoHtml2+'</span>'+b.short+'</button>';
       }).join('');
-      document.getElementById('bank-modal').classList.add('active');
+      App.admin.openAdminModal('bank-modal',{closeOnBackdrop:true});
     },
     selectBank(code,name,btn){
       document.getElementById('bf-bank-code').value=code;document.getElementById('bf-bank-name').value=name;
@@ -4739,7 +5435,7 @@ var App={
       if(!code){App.ui.toast('กรุณาเลือกธนาคาร','error');return;}if(!acct){App.ui.toast('กรุณากรอกเลขบัญชี','error');return;}if(!name){App.ui.toast('กรุณากรอกชื่อบัญชี','error');return;}
       var bank={code:code,bankName:bankName,acct:acct,name:name};
       if(idx<0)App.state._banks.push(bank);else App.state._banks[idx]=bank;
-      document.getElementById('bank-modal').classList.remove('active');App.admin.renderBankListAdmin();
+      App.admin.closeAdminModal('bank-modal');App.admin.renderBankListAdmin();
     },
 
     // ─── ORDERS PAGE ──────────────────────────────────────────
@@ -4909,6 +5605,7 @@ var App={
       App.admin._ordersFp='';
       App.admin._ordersVersion='';
       App.admin._ordersRefreshBusy=false;
+      App.admin.notifyOrdersChanged(opts.reason||'orders_mutation');
       App.admin.loadOrders(true);
       // Apps Script/Sheet write latency can make first read stale; pull once more shortly after
       setTimeout(function(){App.admin.loadOrders(true);},1000);
@@ -5129,13 +5826,13 @@ var App={
       st.year=base.getFullYear();
       App.admin._datePickerState=st;
       var pop=document.getElementById('date-picker-popup');
-      if(pop)pop.classList.add('active');
+      if(pop)App.admin.openAdminModal('date-picker-popup',{closeOnBackdrop:true});
       App.admin.setDatePickerTarget(tg);
       App.admin._renderDatePickerPopup();
     },
     closeDatePickerPopup:function(){
       var pop=document.getElementById('date-picker-popup');
-      if(pop)pop.classList.remove('active');
+      if(pop)App.admin.closeAdminModal('date-picker-popup');
     },
     setDatePickerTarget:function(target){
       var st=App.admin._datePickerState||{};
@@ -5324,6 +6021,7 @@ var App={
         App.admin._ordersDeptSig='';
         App.admin._renderOrders(all);
         App.admin._updateAcceptAllBtnLabel();
+        App.admin.notifyOrdersChanged('status_cooking');
       },{key:'accept_'+orderId});
     },
     cancelOrder:function(orderId){
@@ -5343,6 +6041,7 @@ var App={
           App.admin._renderOrders(all);
           App.admin._updateAcceptAllBtnLabel();
           App.ui.toast('ยกเลิกออเดอร์แล้ว','success');
+          App.admin.notifyOrdersChanged('status_cancelled');
         },{key:'cancel_'+orderId});
       });
     },
@@ -5373,6 +6072,7 @@ var App={
         App.admin._ordersDeptSig='';
         App.admin._renderOrders(App.admin._ordersData);
         App.admin._updateAcceptAllBtnLabel();
+        App.admin.notifyOrdersChanged('bulk_accept');
         var okCount=parseInt(res.data&&res.data.accepted||acceptedIds.length)||acceptedIds.length;
         var fail=parseInt(res.data&&res.data.skipped||0)||0;
         if(fail>0)App.ui.toast('รับออเดอร์แล้ว '+okCount+' รายการ, ข้าม '+fail+' รายการ','warn');
@@ -5785,9 +6485,9 @@ var App={
         }).join('');
       }
       if(all)all.checked=true;
-      var m=document.getElementById('export-pdf-modal');if(m)m.classList.add('active');
+      var m=document.getElementById('export-pdf-modal');if(m)App.admin.openAdminModal('export-pdf-modal',{closeOnBackdrop:true});
     },
-    closeExportPdfModal:function(){var m=document.getElementById('export-pdf-modal');if(m)m.classList.remove('active');},
+    closeExportPdfModal:function(){var m=document.getElementById('export-pdf-modal');if(m)App.admin.closeAdminModal('export-pdf-modal');},
     toggleExportAllDepts:function(checked){
       document.querySelectorAll('#export-pdf-dept-list .epd-dept').forEach(function(cb){cb.checked=!!checked;});
     },
@@ -5980,11 +6680,11 @@ var App={
       if(rs)rs.style.display='';if(ss)ss.style.display='none';
       App.admin._toggleCustomPaperField('ps-paper','ps-paper-custom-wrap');
       App.admin._toggleCustomSizeField('ss-size','ss-size-custom-wrap');
-      var m=document.getElementById('print-modal');if(m)m.classList.add('active');
+      var m=document.getElementById('print-modal');if(m)App.admin.openAdminModal('print-modal',{closeOnBackdrop:false});
       App.admin.updatePrintPreview();
     },
     closePrintModal:function(){
-      var m=document.getElementById('print-modal');if(m)m.classList.remove('active');
+      var m=document.getElementById('print-modal');if(m)App.admin.closeAdminModal('print-modal');
     },
     switchPrintTab:function(tab,btn){
       App.admin._printTab=tab;
@@ -6325,10 +7025,12 @@ var App={
       App.admin._toggleCustomSizeField('bs-size','bs-size-custom-wrap');
       App.admin._buildBatchDeptList();
       App.admin.updateBatchPreview();
-      var m=document.getElementById('batch-print-modal');if(m)m.classList.add('active');
+      App.admin.forceBatchPreviewWrap();
+      App.admin.applyStickerPreviewZoom();
+      var m=document.getElementById('batch-print-modal');if(m)App.admin.openAdminModal('batch-print-modal',{closeOnBackdrop:false});
     },
     closeBatchPrintModal:function(){
-      var m=document.getElementById('batch-print-modal');if(m)m.classList.remove('active');
+      var m=document.getElementById('batch-print-modal');if(m)App.admin.closeAdminModal('batch-print-modal');
       App.admin._batchForcedOrderIds=null;
     },
     switchBatchTab:function(tab,btn){
@@ -6341,6 +7043,8 @@ var App={
       App.admin._toggleCustomPaperField('bp-paper','bp-paper-custom-wrap');
       App.admin._toggleCustomSizeField('bs-size','bs-size-custom-wrap');
       App.admin.updateBatchPreview();
+      App.admin.forceBatchPreviewWrap();
+      App.admin.applyStickerPreviewZoom();
     },
     onBatchDateCalendarChange:function(){
       App.admin._buildBatchDeptList();
@@ -6481,29 +7185,33 @@ var App={
       var countEl=document.getElementById('batch-print-count');if(countEl)countEl.textContent=count;
       var wrap=document.getElementById('batch-preview-content');if(!wrap)return;
       var tab=App.admin._batchTab;
-      wrap.style.display='flex';
-      wrap.style.flexDirection='column';
-      wrap.style.flexWrap='nowrap';
-      wrap.style.justifyContent='flex-start';
-      wrap.style.gap='10px';
-      wrap.style.alignItems=(tab==='sticker')?'center':'flex-start';
+      App.admin.forceBatchPreviewWrap();
       var shopName=window._restaurantName||'FoodOrder';
       var previewOrders=orders.slice(0,6); // แสดงตัวอย่างสูงสุด 6 ใบ
-      if(!previewOrders.length){wrap.innerHTML='<div style="color:var(--text2);font-size:13px;padding:20px">ไม่มีออเดอร์ในเงื่อนไขที่เลือก</div>';return;}
+      if(!previewOrders.length){wrap.innerHTML='<div style="color:var(--text2);font-size:13px;padding:20px">ไม่มีออเดอร์ในเงื่อนไขที่เลือก</div>';App.admin.forceBatchPreviewWrap();App.admin.applyStickerPreviewZoom();return;}
       if(!skipEnsure){
         var needLoad=previewOrders.filter(function(o){return !(Array.isArray(o.items)&&o.items.length);});
         if(needLoad.length){
           wrap.innerHTML='<div style="color:var(--text2);font-size:13px;padding:20px">กำลังโหลดรายการอาหาร...</div>';
+          App.admin.forceBatchPreviewWrap();
+          App.admin.applyStickerPreviewZoom();
           App.admin._ensureOrdersItemsLoaded(needLoad,function(){App.admin.updateBatchPreview(true);});
           return;
         }
       }
       var html='';
       previewOrders.forEach(function(o){
-        html+=App.admin._buildSinglePrintHTML(o,tab,shopName,App.admin._gv,'batch')||'';
+        var singleHtml=App.admin._buildSinglePrintHTML(o,tab,shopName,App.admin._gv,'batch')||'';
+        if(tab==='sticker'){
+          html+='<div class="print-preview-item sticker-item sticker-preview sticker-preview-screen sticker-preview-zoomed"><div class="sticker-preview-scale-box"><div class="sticker-preview-scale-inner">'+singleHtml+'</div></div></div>';
+        }else{
+          html+='<div class="print-preview-item">'+singleHtml+'</div>';
+        }
       });
       if(orders.length>6)html+='<div style="font-size:12px;color:var(--text2);padding:8px;text-align:center;width:100%">...และอีก '+(orders.length-6)+' ออเดอร์</div>';
       wrap.innerHTML=html;
+      App.admin.forceBatchPreviewWrap();
+      App.admin.applyStickerPreviewZoom();
     },
     doBatchPrint:function(skipEnsure){
       var orders=App.admin._getBatchOrders();
