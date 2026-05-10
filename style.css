@@ -2069,3 +2069,34 @@ hr{border:none;border-top:1px solid var(--border);margin:12px 0}
   #apg-printing .printdash-right{display:none !important}
   #apg-printing .printdash-card,#apg-printing .printdash-table-wrap{border:none !important;box-shadow:none !important}
 }
+/* ---- Category tabs scroll fix (PC + admin) ---- */
+.customer-menu-tabs{
+  width:100%;
+  -webkit-overflow-scrolling:touch;
+  scroll-behavior:smooth;
+}
+.customer-menu-tabs .customer-tab-btn,
+.customer-tab-btn{flex:0 0 auto}
+
+/* Admin should use full row width (not 480px cap from customer layout) */
+.admin-menu-filterbar .customer-menu-tabs{
+  max-width:none;
+  width:100%;
+  margin:0;
+  padding:0;
+}
+
+/* Make horizontal scrolling discoverable on desktop */
+@media (min-width: 992px){
+  .customer-menu-tabs{
+    overflow-x:auto;
+    overflow-y:hidden;
+    scrollbar-width:thin;
+    scrollbar-color:rgba(100,116,139,.6) transparent;
+    padding-bottom:6px;
+  }
+  .customer-menu-tabs::-webkit-scrollbar{display:block;height:8px}
+  .customer-menu-tabs::-webkit-scrollbar-track{background:transparent}
+  .customer-menu-tabs::-webkit-scrollbar-thumb{background:rgba(100,116,139,.45);border-radius:999px}
+  .customer-menu-tabs::-webkit-scrollbar-thumb:hover{background:rgba(100,116,139,.7)}
+}
