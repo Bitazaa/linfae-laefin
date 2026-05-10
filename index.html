@@ -295,7 +295,7 @@
             <p class="text-sm text-muted">จัดการพิมพ์ใบเสร็จและสติ๊กเกอร์ผ่านระบบคิว</p>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <button class="printdash-btn printdash-btn-secondary" type="button" onclick="App.admin.refreshPrintingData()">รีเฟรช</button>
+            <button id="printing-refresh-btn" class="printdash-btn printdash-btn-secondary" type="button" onclick="App.admin.handlePrintingRefreshClick()">รีเฟรช</button>
           </div>
         </div>
         <div class="printdash-tabs">
@@ -315,7 +315,7 @@
                 <input id="printing-search-sticker" type="text" class="printdash-input" placeholder="ค้นหาเลขออเดอร์ / ชื่อลูกค้า" oninput="App.admin.onPrintingSearch('sticker',this.value)">
                 <select id="printing-status-sticker" class="printdash-select" onchange="App.admin.renderPrintingOrders('sticker')"><option value="all">สถานะทั้งหมด</option><option value="printed">พิมพ์แล้ว</option><option value="unprinted">ยังไม่พิมพ์</option></select>
                 <select id="printing-payment-sticker" class="printdash-select" onchange="App.admin.renderPrintingOrders('sticker')"><option value="all">การชำระเงิน: ทั้งหมด</option><option value="scan">การชำระเงิน: สแกนจ่าย</option><option value="cash">การชำระเงิน: เก็บเงินปลายทาง</option></select>
-                <button class="printdash-btn printdash-btn-primary" type="button" onclick="App.admin.loadPrintingOrders({force:true})">รีเฟรชรายการ</button>
+                <button class="printdash-btn printdash-btn-primary" type="button" onclick="App.admin.refreshPrintingData({force:true})">รีเฟรชรายการ</button>
               </div>
               <div class="printdash-card printdash-table-wrap">
                 <div class="printdash-actionbar">
@@ -330,16 +330,33 @@
                 <div id="printing-orders-cards-sticker" class="printdash-orders-cards"></div>
                 <div id="printing-pager-sticker" class="printdash-pager"></div>
               </div>
+              <div class="printdash-card print-preview-card print-preview-panel-inline">
+                <div class="print-preview-header-inline">
+                  <div>
+                    <h4>ภาพพรีวิว</h4>
+                    <p>เลื่อนซ้าย-ขวาเพื่อดูตัวอย่างเต็ม</p>
+                  </div>
+                  <div class="sticker-preview-zoom-control">
+                    <label for="sticker-preview-zoom">ขยายภาพพรีวิวสติ๊กเกอร์</label>
+                    <select id="sticker-preview-zoom" class="printdash-select" onchange="App.admin.applyStickerPreviewZoom()">
+                      <option value="160">160% (แนะนำ)</option>
+                      <option value="100">100%</option>
+                      <option value="125">125%</option>
+                      <option value="150">150%</option>
+                      <option value="175">175%</option>
+                      <option value="200">200%</option>
+                    </select>
+                    <small>ใช้สำหรับขยายภาพพรีวิวบนหน้าจอเท่านั้น ไม่กระทบขนาดตอนพิมพ์จริง</small>
+                  </div>
+                </div>
+                <div class="printdash-preview printdash-preview-scroll" id="printing-legacy-preview-sticker"></div>
+              </div>
             </section>
-            <aside class="printdash-right">
-              <div class="printdash-card">
+            <aside class="printdash-right print-legacy-settings-grid">
+              <div class="printdash-card print-method-card">
                 <h4>ตั้งค่าการพิมพ์ (ระบบเดิม)</h4>
                 <div class="form-group"><label class="form-label">Print Method</label><select id="printing-method-sticker" class="printdash-select" onchange="App.admin.printing.saveSettings()"><option value="browser">browser</option></select></div>
                 <div id="printing-legacy-settings-sticker"></div>
-              </div>
-              <div class="printdash-card">
-                <h4>ตัวอย่างพรีวิว (ระบบเดิม)</h4>
-                <div class="printdash-preview" id="printing-legacy-preview-sticker"></div>
               </div>
             </aside>
           </div>
@@ -351,7 +368,7 @@
                 <input id="printing-search-receipt" type="text" class="printdash-input" placeholder="ค้นหาเลขออเดอร์ / ชื่อลูกค้า" oninput="App.admin.onPrintingSearch('receipt',this.value)">
                 <select id="printing-status-receipt" class="printdash-select" onchange="App.admin.renderPrintingOrders('receipt')"><option value="all">สถานะทั้งหมด</option><option value="printed">พิมพ์แล้ว</option><option value="unprinted">ยังไม่พิมพ์</option></select>
                 <select id="printing-payment-receipt" class="printdash-select" onchange="App.admin.renderPrintingOrders('receipt')"><option value="all">การชำระเงิน: ทั้งหมด</option><option value="scan">การชำระเงิน: สแกนจ่าย</option><option value="cash">การชำระเงิน: เก็บเงินปลายทาง</option></select>
-                <button class="printdash-btn printdash-btn-primary" type="button" onclick="App.admin.loadPrintingOrders({force:true})">รีเฟรชรายการ</button>
+                <button class="printdash-btn printdash-btn-primary" type="button" onclick="App.admin.refreshPrintingData({force:true})">รีเฟรชรายการ</button>
               </div>
               <div class="printdash-card printdash-table-wrap">
                 <div class="printdash-actionbar">
@@ -366,16 +383,21 @@
                 <div id="printing-orders-cards-receipt" class="printdash-orders-cards"></div>
                 <div id="printing-pager-receipt" class="printdash-pager"></div>
               </div>
+              <div class="printdash-card print-preview-card print-preview-panel-inline">
+                <div class="print-preview-header-inline">
+                  <div>
+                    <h4>ภาพพรีวิว</h4>
+                    <p>เลื่อนซ้าย-ขวาเพื่อดูตัวอย่างเต็ม</p>
+                  </div>
+                </div>
+                <div class="printdash-preview printdash-preview-scroll" id="printing-legacy-preview-receipt"></div>
+              </div>
             </section>
-            <aside class="printdash-right">
-              <div class="printdash-card">
+            <aside class="printdash-right print-legacy-settings-grid">
+              <div class="printdash-card print-method-card">
                 <h4>ตั้งค่าการพิมพ์ (ระบบเดิม)</h4>
                 <div class="form-group"><label class="form-label">Print Method</label><select id="printing-method-receipt" class="printdash-select" onchange="App.admin.printing.saveSettings()"><option value="browser">browser</option></select></div>
                 <div id="printing-legacy-settings-receipt"></div>
-              </div>
-              <div class="printdash-card">
-                <h4>ตัวอย่างพรีวิว (ระบบเดิม)</h4>
-                <div class="printdash-preview" id="printing-legacy-preview-receipt"></div>
               </div>
             </aside>
           </div>
@@ -497,9 +519,18 @@
           </div>
         </div>
         <div class="notify-footer-actions">
+          <div style="margin-right:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <label class="toggle-switch">
+              <input type="checkbox" id="n-include-admin-link">
+              <span class="toggle-slider"></span>
+            </label>
+            <div class="text-xs text-muted">
+              แนบลิงก์หน้าแอดมินในข้อความแจ้งเตือน
+              <div>ปิดไว้เพื่อความปลอดภัย ไม่ส่งลิงก์แอดมินเข้า LINE/Telegram</div>
+            </div>
+          </div>
           <button id="save-notification-btn" class="btn btn-primary" style="width:auto;min-width:190px" onclick="App.admin.saveNotificationSettings()">บันทึกการตั้งค่าแจ้งเตือน</button>
         </div>
-        <div class="text-xs text-muted" style="margin-top:8px">ลิงก์จะเปิดหน้าแอดมินออเดอร์ (ถ้ามี URL ระบบ)</div>
         <div class="text-xs text-muted" style="margin-top:4px">ระบบจะพยายามส่งซ้ำอัตโนมัติหากล้มเหลว</div>
       </div>
 
@@ -508,13 +539,13 @@
         <div class="section-header"><h2>ตั้งค่าระบบ</h2></div>
         <div style="max-width:640px">
           <!-- TABS -->
-          <div class="settings-tabs">
+          <div class="settings-tabs stab-wrap admin-settings-tabs">
             <button class="stab active" onclick="App.admin.switchSettingsTab(this,'stab-store')">🏪 ร้าน</button>
             <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-order-info')">🧾 ข้อมูลผู้สั่ง</button>
             <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-payment')">💳 ชำระเงิน</button>
             <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-shop-hours')">🕐 เวลาเปิด-ปิด</button>
             <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-users')">👤 ผู้ใช้งาน</button>
-            <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-api')">🔐 API</button>
+            <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-drive')">📁 Google Drive</button>
             <button class="stab" onclick="App.admin.switchSettingsTab(this,'stab-logs')">📝 Logs</button>
           </div>
 
@@ -544,6 +575,9 @@
                     <button type="button" class="btn btn-ghost" style="padding:4px 12px;font-size:12px;width:auto" onclick="App.admin.clearStoreLogo()">✕ ลบรูป</button>
                   </div>
                 </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+                  <button id="save-settings-store-btn" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.saveSettingsTab('store')">บันทึกข้อมูลร้าน</button>
+                </div>
               </div>
             </div>
           </div>
@@ -567,6 +601,9 @@
               </div>
               <div class="form-group">
             <p class="text-xs text-muted" style="margin-top:2px">ระบบจะตั้งข้อความช่องอัตโนมัติ: เลือก “บริษัท” = รายละเอียดการสั่ง, เลือก “หมู่บ้าน” = ที่อยู่จัดส่ง</p>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                <button id="save-settings-order-info-btn" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.saveSettingsTab('order-info')">บันทึกข้อมูลลูกค้า</button>
               </div>
             </div>
           </div>
@@ -592,8 +629,23 @@
               </div>
             </div>
             <div class="card p-4" style="margin-bottom:14px">
+              <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">🔐 SlipOK API</h3>
+              <div class="form-group"><label class="form-label">API Key</label><input id="s-slipok" type="text" class="form-input" placeholder="SLIPOK..."></div>
+              <div class="form-group"><label class="form-label">Branch ID</label><input id="s-branch" type="text" class="form-input" placeholder="Branch ID"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <button id="btn-test-slipok" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.testSlipOKConnection()">ตรวจสอบ SlipOK API</button>
+                <span id="api-slipok-status" class="text-sm text-muted">ยังไม่ได้ตรวจสอบ</span>
+              </div>
+              <div class="text-xs text-muted" style="margin-top:8px;line-height:1.5">
+                หมายเหตุ: Error 1003 = Package หมดอายุ, Error 1004 = โควต้าหมด
+              </div>
+            </div>
+            <div class="card p-4" style="margin-bottom:14px">
               <div class="section-header" style="margin-bottom:12px"><h3 style="font-weight:700;font-size:15px">🏦 บัญชีธนาคาร</h3><button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.addBankSlide()">+ เพิ่มบัญชี</button></div>
               <div id="bank-list-admin"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+                <button id="save-settings-payment-btn" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.saveSettingsTab('payment')">บันทึกการชำระเงิน</button>
+              </div>
             </div>
           </div>
 
@@ -614,6 +666,9 @@
                 <input id="s-open-end" type="datetime-local" class="form-input">
               </div>
               <p class="text-xs text-muted">ถ้าเว้นว่างทั้งสองช่อง จะใช้แค่สวิตช์เปิด/ปิดร้าน</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+                <button id="save-settings-shop-hours-btn" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.saveSettingsTab('shop-hours')">บันทึกเวลาเปิด-ปิด</button>
+              </div>
             </div>
           </div>
 
@@ -625,26 +680,76 @@
             </div>
           </div>
 
-          <!-- TAB: API -->
-          <div id="stab-api" class="stab-panel">
-            <div class="card p-4" style="margin-bottom:14px">
-              <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">🔐 SlipOK API</h3>
-              <div class="form-group"><label class="form-label">API Key</label><input id="s-slipok" type="text" class="form-input" placeholder="SLIPOK..."></div>
-              <div class="form-group"><label class="form-label">Branch ID</label><input id="s-branch" type="text" class="form-input" placeholder="Branch ID"></div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                <button id="btn-test-slipok" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.testSlipOKConnection()">ตรวจสอบ SlipOK API</button>
-                <span id="api-slipok-status" class="text-sm text-muted">ยังไม่ได้ตรวจสอบ</span>
-              </div>
-              <div class="text-xs text-muted" style="margin-top:8px;line-height:1.5">
-                หมายเหตุ: Error 1003 = Package หมดอายุ, Error 1004 = โควต้าหมด
-              </div>
-            </div>
+          <!-- TAB: Google Drive -->
+          <div id="stab-drive" class="stab-panel">
             <div class="card p-4" style="margin-bottom:14px">
               <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">📁 Google Drive</h3>
-              <div class="form-group"><label class="form-label">Folder ID (เก็บรูปเมนู)</label><input id="s-drive" type="text" class="form-input" placeholder="วาง Folder ID หรือลิงก์โฟลเดอร์ Google Drive ได้"></div>
+              <div class="drive-folder-status-card">
+                <div class="text-sm" style="font-weight:700;margin-bottom:4px">สถานะโฟลเดอร์รูปเมนู</div>
+                <div id="api-drive-folder-status" class="text-xs text-muted" style="line-height:1.5">ยังไม่ได้สร้างโฟลเดอร์</div>
+                <div id="api-drive-folder-meta" class="text-xs text-muted" style="margin-top:6px;line-height:1.5"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                  <button id="btn-copy-drive-id" class="btn btn-ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="App.admin.copyDriveFolderId()">คัดลอก Folder ID</button>
+                  <a id="btn-open-drive-folder" class="btn btn-secondary" style="display:none;width:auto;padding:6px 12px;font-size:12px" target="_blank" rel="noopener">เปิดโฟลเดอร์ใน Google Drive</a>
+                </div>
+              </div>
+              <div class="form-group" style="margin-top:10px"><label class="form-label">ชื่อโฟลเดอร์ (อัตโนมัติ)</label><input id="s-drive-folder-name" type="text" class="form-input" value="FoodOrder Menu Images" placeholder="FoodOrder Menu Images"></div>
+              <div class="text-xs text-muted" style="margin-top:-2px;margin-bottom:8px;line-height:1.5">
+                ระบบจะสร้างโฟลเดอร์ใน Google Drive ของบัญชีที่ Deploy Web App และบันทึก Folder ID ให้อัตโนมัติ
+              </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <button id="btn-create-drive-folder" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.createMenuImageFolder()">สร้างโฟลเดอร์อัตโนมัติ</button>
                 <button id="btn-test-drive" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.testGoogleDriveConnection()">ตรวจสอบ Google Drive</button>
                 <span id="api-drive-status" class="text-sm text-muted">ยังไม่ได้ตรวจสอบ</span>
+              </div>
+              <div style="margin-top:10px">
+                <button class="btn btn-ghost" type="button" style="width:auto;padding:6px 12px;font-size:12px" onclick="App.admin.toggleDriveAdvancedSettings()">ตั้งค่าขั้นสูง</button>
+              </div>
+              <div id="drive-advanced-panel" class="drive-advanced-panel">
+                <div class="form-group" style="margin-top:8px">
+                  <label class="form-label">Folder ID (ขั้นสูง)</label>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <input id="s-drive" type="text" class="form-input" readonly placeholder="ระบบจะบันทึกให้อัตโนมัติ">
+                    <button id="btn-drive-manual-edit" class="btn btn-ghost" type="button" style="width:auto;padding:6px 12px;font-size:12px" onclick="App.admin.enableManualDriveFolderEdit()">แก้ไขเอง</button>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+                <button id="save-settings-api-btn" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.saveSettingsTab('api')">บันทึก API</button>
+              </div>
+              <div class="drive-migrate-card" style="margin-top:12px">
+                <div class="text-sm" style="font-weight:700">ย้ายรูปเมนูเดิมเข้า Google Drive</div>
+                <div class="text-xs text-muted" style="line-height:1.5;margin-top:4px">
+                  ระบบจะคัดลอกรูปเมนูเดิมจาก Sheet/URL/Drive เดิม ไปยังโฟลเดอร์ Google Drive ใหม่ แล้วอัปเดตลิงก์รูปในเมนูให้อัตโนมัติ
+                </div>
+                <div class="text-xs text-muted" style="line-height:1.5;margin-top:4px">
+                  ระบบจะคัดลอกไฟล์ใหม่ ไม่ลบรูปเดิม และจะอัปเดตลิงก์รูปในเมนูให้เอง
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                  <button id="btn-migrate-menu-images" class="btn btn-secondary" style="display:none;width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.migrateMenuImagesToDrive()">ย้ายรูปเมนูเดิมเข้า Drive</button>
+                  <button id="btn-backup-menu-images" class="btn btn-ghost" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.backupMenuBeforeImageMigration()">สำรองข้อมูลเมนูก่อนย้ายรูป</button>
+                  <button id="btn-verify-menu-images" class="btn btn-ghost" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.verifyMigratedMenuImages()">ตรวจสอบรูปเมนูหลังย้าย</button>
+                  <button id="btn-copy-migrate-report" class="btn btn-ghost" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.copyMenuImageMigrationReport()">คัดลอกรายงาน</button>
+                </div>
+                <div id="menu-image-migrate-status" style="display:none;margin-top:10px">
+                  <div class="drive-migrate-progress"><span id="menu-image-migrate-bar"></span></div>
+                  <div id="menu-image-migrate-text" class="text-xs text-muted" style="margin-top:6px"></div>
+                  <div id="menu-image-migrate-summary" class="text-xs text-muted" style="margin-top:4px"></div>
+                  <div id="menu-image-backup-status" class="text-xs text-muted" style="margin-top:4px"></div>
+                  <div id="menu-image-verify-summary" class="text-xs text-muted" style="margin-top:4px"></div>
+                  <details id="menu-image-migrate-failed-wrap" style="display:none;margin-top:8px">
+                    <summary class="text-xs" style="cursor:pointer">ดูรายการที่ย้ายไม่สำเร็จ</summary>
+                    <ul id="menu-image-migrate-failed-list" class="text-xs text-muted" style="margin:6px 0 0 16px"></ul>
+                  </details>
+                </div>
+                <details style="margin-top:10px" class="drive-danger-zone">
+                  <summary class="text-sm" style="cursor:pointer;color:#b91c1c;font-weight:700">ย้อนกลับลิงก์รูปเมนู (Danger Zone)</summary>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                    <button class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.checkRollbackCandidates()">ตรวจสอบรายการที่ย้อนกลับได้</button>
+                    <button class="btn btn-danger" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.rollbackMenuImagesLatest()">ย้อนกลับรูปเมนูที่ย้ายล่าสุด</button>
+                  </div>
+                  <div id="menu-image-rollback-summary" class="text-xs text-muted" style="margin-top:8px"></div>
+                </details>
               </div>
             </div>
           </div>
@@ -664,7 +769,7 @@
             </div>
           </div>
 
-          <button id="save-settings-btn" class="btn btn-primary" style="margin-top:8px" onclick="App.admin.saveSettings()">บันทึกการตั้งค่า</button>
+          <button id="save-settings-btn" class="btn btn-primary" style="margin-top:8px;display:none" onclick="App.admin.saveSettings()">บันทึกการตั้งค่า</button>
         </div>
       </div>
 
@@ -790,9 +895,9 @@
   </div>
 
   <!-- MENU MODAL -->
-  <div id="menu-modal" class="admin-modal" onclick="if(event.target===this)this.classList.remove('active')">
+  <div id="menu-modal" class="admin-modal">
     <div class="admin-modal-box" onclick="event.stopPropagation()">
-      <div class="admin-modal-header"><h3 id="menu-modal-title">เพิ่มเมนู</h3><button class="btn-icon" onclick="document.getElementById('menu-modal').classList.remove('active')">✕</button></div>
+      <div class="admin-modal-header"><h3 id="menu-modal-title">เพิ่มเมนู</h3><button class="btn-icon" onclick="App.admin.closeAdminModal('menu-modal')">✕</button></div>
       <div class="admin-modal-body">
         <input type="hidden" id="mf-id">
         <div class="form-group"><label class="form-label">ชื่อเมนู *</label><input id="mf-name" type="text" class="form-input"></div>
@@ -834,14 +939,14 @@
         </div>
         <div class="form-group"><label class="form-label">สถานะ</label><select id="mf-status" class="form-input"><option value="active">เปิดขาย</option><option value="inactive">ปิดขาย</option></select></div>
       </div>
-      <div class="admin-modal-footer"><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('menu-modal').classList.remove('active')">ยกเลิก</button><button id="save-menu-btn" class="btn btn-primary" style="flex:2" onclick="App.admin.saveMenu()">บันทึก</button></div>
+      <div class="admin-modal-footer"><button class="btn btn-ghost" style="flex:1" onclick="App.admin.closeAdminModal('menu-modal')">ยกเลิก</button><button id="save-menu-btn" class="btn btn-primary" style="flex:2" onclick="App.admin.saveMenu()">บันทึก</button></div>
     </div>
   </div>
 
   <!-- TOPIC MODAL -->
-  <div id="topic-modal" class="admin-modal" onclick="if(event.target===this)this.classList.remove('active')">
+  <div id="topic-modal" class="admin-modal">
     <div class="admin-modal-box" onclick="event.stopPropagation()">
-      <div class="admin-modal-header"><h3 id="topic-modal-title">เพิ่มหัวข้อตัวเลือก</h3><button class="btn-icon" onclick="document.getElementById('topic-modal').classList.remove('active')">✕</button></div>
+      <div class="admin-modal-header"><h3 id="topic-modal-title">เพิ่มหัวข้อตัวเลือก</h3><button class="btn-icon" onclick="App.admin.closeAdminModal('topic-modal')">✕</button></div>
       <div class="admin-modal-body">
         <input type="hidden" id="tf-id">
         <div class="form-group"><label class="form-label">ชื่อหัวข้อ *</label><input id="tf-name" type="text" class="form-input"></div>
@@ -860,7 +965,7 @@
         </div>
         <div class="form-group"><label class="form-label">สถานะ</label><select id="tf-status" class="form-input"><option value="active">เปิดใช้</option><option value="inactive">ปิดใช้</option></select></div>
       </div>
-      <div class="admin-modal-footer"><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('topic-modal').classList.remove('active')">ยกเลิก</button><button id="save-topic-btn" class="btn btn-primary" style="flex:2" onclick="App.admin.saveTopic()">บันทึก</button></div>
+      <div class="admin-modal-footer"><button class="btn btn-ghost" style="flex:1" onclick="App.admin.closeAdminModal('topic-modal')">ยกเลิก</button><button id="save-topic-btn" class="btn btn-primary" style="flex:2" onclick="App.admin.saveTopic()">บันทึก</button></div>
     </div>
   </div>
 
@@ -1136,7 +1241,7 @@
               <div id="batch-count-badge" style="font-size:12px;font-weight:700;color:var(--primary);background:var(--primary-light);padding:3px 10px;border-radius:20px">0 ออเดอร์</div>
             </div>
             <div class="print-preview-wrap batch-preview-wrap" id="batch-preview-wrap">
-              <div id="batch-preview-content" style="display:flex;flex-direction:column;flex-wrap:nowrap;gap:10px;justify-content:flex-start;align-items:center"></div>
+              <div id="batch-preview-content" class="print-preview-content"></div>
             </div>
           </div>
         </div>
@@ -1689,5 +1794,4 @@
 <script src="app.js"></script>
 </body>
 </html>
-
 
