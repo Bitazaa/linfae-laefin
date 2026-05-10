@@ -44,7 +44,7 @@ var App={
     _banks:[],_bankIdx:0,_payTab:'pp',_shopOpenNow:true,_shopAvailabilityTimer:null,_adminLight:false,
     _cropImg:null,_cropX:0,_cropY:0,_cropScale:1,_cropDragging:false,_cropStartX:0,_cropStartY:0,_finalImgB64:null,
     _customerMenuFilter:'all',_customerMenuSearch:'',_restaurantLogo:'',
-    _storeLogoB64:null,_storeLogoSrcUrl:null,_cropSourceType:'url',_cropTarget:'menu',
+    _storeLogoB64:null,_storeLogoSrcUrl:null,_cropSourceType:'url',_cropTarget:'menu',_menuCropRequired:false,
     _adminCache:{},_settingsRaw:{},_settingsPublic:null,_settingsPublicAt:0,_settingsPublicLoading:false,_settingsPublicQueue:[],
     _deliveryCategoryType:'village',_deliveryNoteMode:'note',
     _cashPaymentEnabled:false,_promptpayEnabled:true,_bankPaymentEnabled:true,_paymentMethod:'scan',_payTimeoutSec:900,
@@ -4086,7 +4086,7 @@ var App={
       var stockVal=(item&&App.u.stockVal(item.stock)>=0)?App.u.stockVal(item.stock):'';
       setVal('mf-id',item?item.id:'');setVal('mf-name',item?item.name:'');setVal('mf-price',item?item.price:'');setVal('mf-stock',stockVal);setVal('mf-category',item?item.category:'');setVal('mf-image',item?item.image:'');setVal('mf-status',item?item.status:'active');
       App.admin.renderCategorySuggestions();
-      App.state._finalImgB64=null;App.state._cropSrcUrl=item?item.image:null;App.state._cropSourceType='url';App.state._cropTarget='menu';
+      App.state._finalImgB64=null;App.state._cropSrcUrl=item?item.image:null;App.state._cropSourceType='url';App.state._cropTarget='menu';App.state._menuCropRequired=false;
       // reset tabs to URL
       App.admin.switchImgTab('url');
       var fi=document.getElementById('img-preview-final'),pi=document.getElementById('img-preview-img');
@@ -4118,13 +4118,14 @@ var App={
         pi.src=url;
         pi.onerror=function(){if(fi)fi.style.display='none';};
         pi.onload=function(){
-          App.state._cropSrcUrl=url;App.state._finalImgB64=null;App.state._cropSourceType='url';App.state._cropTarget='menu';
+          App.state._cropSrcUrl=url;App.state._finalImgB64=null;App.state._cropSourceType='url';App.state._cropTarget='menu';App.state._menuCropRequired=false;
           if(fi)fi.style.display='';
         };
       }
     },
     onImgFileSelected:function(ev){
       var file=ev.target.files&&ev.target.files[0];if(!file)return;
+      App.state._menuCropRequired=true;
       var reader=new FileReader();
       reader.onload=function(e){
         App.state._cropSrcUrl=e.target.result;
@@ -4139,7 +4140,7 @@ var App={
       ev.target.value=''; // reset input
     },
     clearMenuImg:function(){
-      App.state._finalImgB64=null;App.state._cropSrcUrl=null;App.state._cropSourceType='url';App.state._cropTarget='menu';
+      App.state._finalImgB64=null;App.state._cropSrcUrl=null;App.state._cropSourceType='url';App.state._cropTarget='menu';App.state._menuCropRequired=false;
       var fi=document.getElementById('img-preview-final'),pi=document.getElementById('img-preview-img');
       if(fi)fi.style.display='none';if(pi)pi.src='';
       var img=document.getElementById('mf-image');if(img)img.value='';
@@ -4207,6 +4208,7 @@ var App={
           var sl=document.getElementById('s-logo');if(sl)sl.value='';
         }else{
           App.state._finalImgB64=b64;App.state._cropSrcUrl=b64;
+          App.state._menuCropRequired=false;
           var pi=document.getElementById('img-preview-img');if(pi)pi.src=b64;
           var mi=document.getElementById('mf-image');if(mi)mi.value='';
         }
@@ -4296,6 +4298,11 @@ var App={
       if(!name){App.ui.toast('กรุณากรอกชื่อเมนู','error');return;}
       if(!price||price<=0){App.ui.toast('กรุณากรอกราคา','error');return;}
       if(String(stockRaw||'').trim()!==''&&toNum(stockRaw)<0){App.ui.toast('สต๊อกต้องเป็น 0 หรือมากกว่า','error');return;}
+      if(App.state._menuCropRequired){
+        App.ui.toast('กรุณาครอบรูปก่อนบันทึกเมนู','warn');
+        if(App.state._cropSrcUrl)App.admin.openCrop('menu');
+        return;
+      }
       var selectedTopics=[];document.querySelectorAll('#mf-topics-list input[type=checkbox]:checked').forEach(function(cb){selectedTopics.push(cb.value);});
       var imgUrl=document.getElementById('mf-image').value||'';
       var b64=App.state._finalImgB64||null;
@@ -4457,6 +4464,11 @@ var App={
       if(!name){App.ui.toast('กรุณากรอกชื่อหัวข้อ','error');return;}
       if(!App.state._topicChoices.length){App.ui.toast('กรุณาเพิ่มตัวเลือกอย่างน้อย 1 อย่าง','error');return;}
       if(String(stockRaw||'').trim()!==''&&toNum(stockRaw)<0){App.ui.toast('สต๊อกต้องเป็น 0 หรือมากกว่า','error');return;}
+      if(App.state._menuCropRequired){
+        App.ui.toast('กรุณาครอบรูปก่อนบันทึกเมนู','warn');
+        if(App.state._cropSrcUrl)App.admin.openCrop('menu');
+        return;
+      }
       var data={id:id,group_name:name,menu_id:document.getElementById('tf-menu-id').value||'*',type:document.getElementById('tf-type').value,is_required:document.getElementById('tf-required').value,stock:(String(stockRaw||'').trim()===''?'':parseInt(stockRaw,10)),choices:JSON.stringify(App.state._topicChoices.map(function(c){return typeof c==='string'?{label:c,price:0}:c;})),status:document.getElementById('tf-status').value};
       App.u.btnAction({
         debounceKey:'savetopic',debounceMs:2000,
@@ -5354,6 +5366,7 @@ var App={
     },
     onStoreLogoFileSelected:function(ev){
       var file=ev.target.files&&ev.target.files[0];if(!file)return;
+      App.state._menuCropRequired=true;
       var reader=new FileReader();
       reader.onload=function(e){
         var src=e.target.result||'';
@@ -7539,4 +7552,5 @@ App.print={};
 
 function toNum(v){var n=parseFloat(v);return isNaN(n)?0:n;}
 document.addEventListener('DOMContentLoaded',function(){App.init();});
+
 
