@@ -709,7 +709,7 @@ var App={
     },
     _customerNoteLabel:function(){
       var cat=String(App.state._deliveryCategoryType||'village');
-      return cat==='village'?'หมายเหตุ':'หมายเหตุเพิ่มเติม';
+      return cat==='village'?'หมายเหตุ / Comment':'หมายเหตุเพิ่มเติม / Comment';
     },
     applyOrderInfoLabels:function(){
       var isVillage=String(App.state._deliveryCategoryType||'village')==='village';
@@ -736,7 +736,7 @@ var App={
       var customerNoteEl=document.getElementById('cust-customer-note-label');
       if(customerNoteEl)customerNoteEl.textContent=customerNoteLabel;
       var customerNoteInput=document.getElementById('cust-customer-note');
-      if(customerNoteInput)customerNoteInput.placeholder=(customerNoteLabel==='หมายเหตุ'?'เช่น ไม่เผ็ด, โทรก่อนส่ง':'รายละเอียดเพิ่มเติม');
+      if(customerNoteInput)customerNoteInput.placeholder=(isVillage?'เช่น ไม่เผ็ด, ขอช้อนเพิ่ม, โทรก่อนส่ง':'รายละเอียดเพิ่มเติม / Comment');
     },
     setPaymentMethod:function(method){
       var m=(String(method||'')==='cash')?'cash':'scan';
@@ -1033,6 +1033,7 @@ var App={
       if(App.u.debounce('checkout',4000))return;
       var nameEl=document.getElementById('cust-name'),deptEl=document.getElementById('dept-select'),noteEl=document.getElementById('cust-note'),customerNoteEl=document.getElementById('cust-customer-note');
       var name=nameEl?nameEl.value.trim():'',dept=deptEl?deptEl.value:'',note=noteEl?noteEl.value.trim():'',customerNote=customerNoteEl?customerNoteEl.value.trim():'';
+      customerNote=customerNote.substring(0,500);
       var isVillage=String(App.state._deliveryCategoryType||'village')==='village';
       if(isVillage)dept='';
       if(!name){App.ui.toast('กรุณากรอกชื่อ','error');if(nameEl)nameEl.focus();return;}
@@ -4298,11 +4299,6 @@ var App={
       if(!name){App.ui.toast('กรุณากรอกชื่อเมนู','error');return;}
       if(!price||price<=0){App.ui.toast('กรุณากรอกราคา','error');return;}
       if(String(stockRaw||'').trim()!==''&&toNum(stockRaw)<0){App.ui.toast('สต๊อกต้องเป็น 0 หรือมากกว่า','error');return;}
-      if(App.state._menuCropRequired){
-        App.ui.toast('กรุณาครอบรูปก่อนบันทึกเมนู','warn');
-        if(App.state._cropSrcUrl)App.admin.openCrop('menu');
-        return;
-      }
       var selectedTopics=[];document.querySelectorAll('#mf-topics-list input[type=checkbox]:checked').forEach(function(cb){selectedTopics.push(cb.value);});
       var imgUrl=document.getElementById('mf-image').value||'';
       var b64=App.state._finalImgB64||null;
@@ -4438,7 +4434,8 @@ var App={
       var setVal=function(id,v){var el=document.getElementById(id);if(el)el.value=(v==null)?'':String(v);};
       document.getElementById('topic-modal-title').textContent=t?'แก้ไขหัวข้อ':'เพิ่มหัวข้อ';
       var topicStock=(t&&App.u.stockVal(t.stock)>=0)?App.u.stockVal(t.stock):'';
-      setVal('tf-id',t?t.id:'');setVal('tf-name',t?t.group_name:'');setVal('tf-required',t?String(t.is_required||'false'):'false');setVal('tf-status',t?t.status:'active');setVal('tf-type',t?t.type:'single');setVal('tf-stock',topicStock);
+      var topicStatus=(t&&String(t.status||'').toLowerCase()==='inactive')?'inactive':'active';
+      setVal('tf-id',t?t.id:'');setVal('tf-name',t?t.group_name:'');setVal('tf-required',t?String(t.is_required||'false'):'false');setVal('tf-status',topicStatus);setVal('tf-type',t?t.type:'single');setVal('tf-stock',topicStock);
       var menuSel=document.getElementById('tf-menu-id');
       if(menuSel){
         menuSel.innerHTML='<option value="*_unlinked_new">ยังไม่ผูกเมนู (ไม่แสดงฝั่งลูกค้า)</option><option value="*">ทุกเมนู</option>'+App.state.adminMenuItems.map(function(m){return'<option value="'+App.u.esc(m.id)+'">'+App.u.esc(m.name)+'</option>';}).join('');
@@ -4464,12 +4461,8 @@ var App={
       if(!name){App.ui.toast('กรุณากรอกชื่อหัวข้อ','error');return;}
       if(!App.state._topicChoices.length){App.ui.toast('กรุณาเพิ่มตัวเลือกอย่างน้อย 1 อย่าง','error');return;}
       if(String(stockRaw||'').trim()!==''&&toNum(stockRaw)<0){App.ui.toast('สต๊อกต้องเป็น 0 หรือมากกว่า','error');return;}
-      if(App.state._menuCropRequired){
-        App.ui.toast('กรุณาครอบรูปก่อนบันทึกเมนู','warn');
-        if(App.state._cropSrcUrl)App.admin.openCrop('menu');
-        return;
-      }
-      var data={id:id,group_name:name,menu_id:document.getElementById('tf-menu-id').value||'*',type:document.getElementById('tf-type').value,is_required:document.getElementById('tf-required').value,stock:(String(stockRaw||'').trim()===''?'':parseInt(stockRaw,10)),choices:JSON.stringify(App.state._topicChoices.map(function(c){return typeof c==='string'?{label:c,price:0}:c;})),status:document.getElementById('tf-status').value};
+      var statusVal=(String(document.getElementById('tf-status').value||'').toLowerCase()==='inactive')?'inactive':'active';
+      var data={id:id,group_name:name,menu_id:document.getElementById('tf-menu-id').value||'*',type:document.getElementById('tf-type').value,is_required:document.getElementById('tf-required').value,stock:(String(stockRaw||'').trim()===''?'':parseInt(stockRaw,10)),choices:JSON.stringify(App.state._topicChoices.map(function(c){return typeof c==='string'?{label:c,price:0}:c;})),status:statusVal};
       App.u.btnAction({
         debounceKey:'savetopic',debounceMs:2000,
         btnId:'save-topic-btn',loadingText:'⏳ กำลังบันทึก...',successText:'บันทึก',
@@ -7552,5 +7545,4 @@ App.print={};
 
 function toNum(v){var n=parseFloat(v);return isNaN(n)?0:n;}
 document.addEventListener('DOMContentLoaded',function(){App.init();});
-
 
