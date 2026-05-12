@@ -5349,7 +5349,7 @@ var App={
         App.admin._ordersViewCache={key:'',data:null};
         App.admin._ordersDeptSig='';
         App.admin._renderOrders(all);
-        App.admin.notifyOrdersChanged('cash_confirmed');
+        App.admin._refreshOrdersAfterMutation({manual:true});
         App.ui.toast('อัพเดทการรับเงินสดแล้ว','success');
       },{key:'cash_confirm_'+orderId});
     },
