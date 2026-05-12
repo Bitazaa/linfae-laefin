@@ -5559,6 +5559,40 @@ var App={
           +'</div>';
         }).join('');
       }
+      var pendingNamesEl=document.getElementById('orders-cash-pending-names');
+      if(!pendingNamesEl&&sumWrap){
+        pendingNamesEl=document.createElement('div');
+        pendingNamesEl.id='orders-cash-pending-names';
+        pendingNamesEl.style.margin='10px 0 12px';
+        sumWrap.appendChild(pendingNamesEl);
+      }
+      if(pendingNamesEl){
+        if(!pendingCashAll.length){
+          pendingNamesEl.innerHTML='';
+        }else{
+          var showList=pendingCashAll.slice().sort(function(a,b){
+            var ta=Date.parse(String(a&&a.created_at||''))||0;
+            var tb=Date.parse(String(b&&b.created_at||''))||0;
+            return tb-ta;
+          }).slice(0,30);
+          pendingNamesEl.innerHTML='<div class="kpi-card orders-kpi-card" style="padding:12px">'
+            +'<div class="orders-kpi-top"><span class="orders-kpi-icon">👥</span><span class="orders-kpi-title">รายชื่อค้างชำระเงินสด (ล่าสุด)</span></div>'
+            +'<div class="orders-kpi-sub" style="margin-top:6px">แสดง '+showList.length+' จากทั้งหมด '+pendingCashAll.length+' รายการ</div>'
+            +'<div style="margin-top:8px;display:grid;gap:6px">'
+            +showList.map(function(o){
+              var nm=String(o&&o.customer||'ไม่ระบุชื่อ');
+              var oid=String(o&&o.id||'-');
+              var dep=String(o&&o.department||'');
+              var amt='฿'+Math.round(parseFloat(o&&o.total||0)).toLocaleString('th-TH');
+              return '<div style="display:flex;justify-content:space-between;gap:8px;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:7px 10px">'
+                +'<div style="min-width:0"><strong>'+e(nm)+'</strong> <span style="opacity:.75">#'+e(oid)+'</span>'+(dep?(' <span style="opacity:.75">('+e(dep)+')</span>'):'')+'</div>'
+                +'<div style="color:#fb7185;font-weight:800">'+amt+'</div>'
+              +'</div>';
+            }).join('')
+            +'</div>'
+          +'</div>';
+        }
+      }
       var salesEl=document.getElementById('orders-sales-chart');
       if(salesEl){
         var src=(view.sorted||[]);
