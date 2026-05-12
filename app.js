@@ -5520,6 +5520,20 @@ var App={
       var sumWrap=document.getElementById('orders-summary');
       // คำนวณจาก orders ในช่วงที่เลือก (date filtered)
       var totalRevenue=nonCancelledOrders.reduce(function(s,o){return s+parseFloat(o.total||0);},0);
+      var isCashPending=function(o){
+        var mRaw=String(o&&o.payment_method||'').trim();
+        var m=mRaw.toLowerCase();
+        var st=String(o&&o.status||'').trim().toLowerCase();
+        var ps=String(o&&o.payment_status||'').trim().toLowerCase();
+        var isCash=(m==='cash'||m==='cod'||m==='ปลายทาง'||mRaw.indexOf('เก็บเงินปลายทาง')>-1);
+        var isPaid=(ps==='cash'||ps==='paid'||ps==='completed');
+        return isCash&&!isPaid&&st!=='cancelled';
+      };
+      var pendingCashFiltered=nonCancelledOrders.filter(isCashPending);
+      var pendingCashFilteredAmount=pendingCashFiltered.reduce(function(s,o){return s+parseFloat(o&&o.total||0);},0);
+      var allRows=Array.isArray(allData)?allData:(Array.isArray(App.admin._ordersData)?App.admin._ordersData:[]);
+      var pendingCashAll=allRows.filter(isCashPending);
+      var pendingCashAllAmount=pendingCashAll.reduce(function(s,o){return s+parseFloat(o&&o.total||0);},0);
       var _drLabels={'1':'วันนี้','7':'7 วัน','30':'30 วัน','all':'ทั้งหมด'};
       var _drLabel=_drLabels[App.admin._ordersFilterDate||'all']||'';
       if((App.admin._ordersFilterDate||'all')==='custom'){
@@ -5534,7 +5548,9 @@ var App={
       if(kpiRow){
         kpiRow.innerHTML=[
           {icon:'📦',label:'ออเดอร์ ('+_drLabel+')',val:nonCancelledOrders.length,color:'var(--primary)',sub:'ไม่รวมรายการที่ยกเลิก'},
-          {icon:'💰',label:'ยอดเงิน ('+_drLabel+')',val:'฿'+Math.round(totalRevenue).toLocaleString('th-TH'),color:'var(--green)',sub:'รวมยอดจากออเดอร์ที่ไม่ยกเลิก'}
+          {icon:'💰',label:'ยอดเงิน ('+_drLabel+')',val:'฿'+Math.round(totalRevenue).toLocaleString('th-TH'),color:'var(--green)',sub:'รวมยอดจากออเดอร์ที่ไม่ยกเลิก'},
+          {icon:'💵',label:'เงินสดค้างชำระ ('+_drLabel+')',val:'฿'+Math.round(pendingCashFilteredAmount).toLocaleString('th-TH'),color:'#f59e0b',sub:(pendingCashFiltered.length||0)+' รายการ'},
+          {icon:'🧾',label:'เงินสดค้างชำระ (ทั้งหมด)',val:'฿'+Math.round(pendingCashAllAmount).toLocaleString('th-TH'),color:'#fb7185',sub:(pendingCashAll.length||0)+' รายการ'}
         ].map(function(k){
           return '<div class="kpi-card orders-kpi-card">'
             +'<div class="orders-kpi-top"><span class="orders-kpi-icon">'+e(k.icon)+'</span><span class="orders-kpi-title">'+e(k.label)+'</span></div>'
