@@ -5328,10 +5328,13 @@ var App={
     },
     _canConfirmCashOrder:function(o){
       if(!o)return false;
-      var method=String(o.payment_method||'').toLowerCase();
+      var methodRaw=String(o.payment_method||'').trim();
+      var method=methodRaw.toLowerCase();
       var payStatus=String(o.payment_status||'').toLowerCase();
       var st=String(o.status||'').toLowerCase();
-      return method==='cash'&&payStatus!=='cash'&&st!=='cancelled';
+      var isCash=(method==='cash'||method==='cod'||method==='ปลายทาง'||methodRaw.indexOf('เก็บเงินปลายทาง')>-1);
+      var isPaidCash=(payStatus==='cash'||payStatus==='paid'||payStatus==='completed');
+      return isCash&&!isPaidCash&&st!=='cancelled';
     },
     confirmCashPayment:function(orderId){
       if(!App.admin.ensureCanEdit())return;
