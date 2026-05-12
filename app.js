@@ -5355,6 +5355,22 @@ var App={
         App.admin._updateAcceptAllBtnLabel();
       },{key:'accept_'+orderId});
     },
+    markOrderDone:function(orderId){
+      if(!App.admin.ensureCanEdit())return;
+      if(!orderId)return;
+      App.api.call('updateOrderStatus',[orderId,'done',App.state.adminToken],function(res){
+        if(App.admin._auth(res))return;
+        if(!res||!res.success){App.ui.toast((res&&res.message)||'อัปเดตสถานะไม่สำเร็จ','warn');return;}
+        var all=App.admin._ordersData||[];
+        var it=all.find(function(x){return String(x.id)===String(orderId);});
+        if(it)it.status='done';
+        App.admin._ordersFp=App.admin._ordersFingerprint(all);
+        App.admin._ordersViewCache={key:'',data:null};
+        App.admin._ordersDeptSig='';
+        App.admin._renderOrders(all);
+        App.ui.toast('อัปเดตเป็นงานเสร็จแล้ว','success');
+      },{key:'done_'+orderId});
+    },
     cancelOrder:function(orderId){
       if(!App.admin.ensureCanEdit())return;
       if(!orderId)return;
@@ -5362,7 +5378,7 @@ var App={
         if(!ok)return;
         App.api.call('updateOrderStatus',[orderId,'cancelled',App.state.adminToken],function(res){
           if(App.admin._auth(res))return;
-        if(!res||!res.success){App.ui.toast((res&&res.message)||'ยืนยันรับเงินสดไม่สำเร็จ','warn');return;}
+          if(!res||!res.success){App.ui.toast((res&&res.message)||'ยกเลิกออเดอร์ไม่สำเร็จ','warn');return;}
           var all=App.admin._ordersData||[];
           var it=all.find(function(x){return String(x.id)===String(orderId);});
           if(it)it.status='cancelled';
@@ -5380,7 +5396,6 @@ var App={
       if(App.u.debounce('accept_all_new',1200))return;
       var rows=(App.admin._ordersData||[]);
       var targets=rows.filter(function(o){var st=String(o.status||'').trim().toLowerCase();return st==='paid'||st==='pending';});
-        if(!res||!res.success){App.ui.toast((res&&res.message)||'ยืนยันรับเงินสดไม่สำเร็จ','warn');return;}
       var btn=document.getElementById('accept-all-new-btn');
       var ids=targets.map(function(o){return String(o.id||'');}).filter(Boolean);
       App.ui.setBtn(btn,true,'กำลังรับออเดอร์...');
@@ -5404,7 +5419,7 @@ var App={
         App.admin._updateAcceptAllBtnLabel();
         var okCount=parseInt(res.data&&res.data.accepted||acceptedIds.length)||acceptedIds.length;
         var fail=parseInt(res.data&&res.data.skipped||0)||0;
-        if(!res||!res.success){App.ui.toast((res&&res.message)||'ยืนยันรับเงินสดไม่สำเร็จ','warn');return;}
+        if(fail>0)App.ui.toast('รับออเดอร์แล้ว '+okCount+' รายการ, ข้าม '+fail+' รายการ','warn');
         else App.ui.toast('รับออเดอร์ทั้งหมดสำเร็จ '+okCount+' รายการ','success');
       },{key:'bulk_accept_all',loaderText:'กำลังรับออเดอร์ทั้งหมด...'});
     },
@@ -5657,6 +5672,8 @@ var App={
         }
         var st=App.admin._statusUi(o.status);
         var isCancelled=String(o&&o.status||'').trim().toLowerCase()==='cancelled';
+        var stRaw=String(o&&o.status||'').trim().toLowerCase();
+        var canMarkDone=(!isCancelled && stRaw!=='done' && stRaw!=='cancelled' && stRaw!=='pending' && stRaw!=='paid');
         var timeStr=o.__timeLabel||'?';
         var itemsHtml='';
         if(items.length){
@@ -5692,9 +5709,11 @@ var App={
             +(o.customer_note?'<div class="text-xs text-muted" style="margin-top:4px">💬 '+e(App.admin._customerNoteLabel())+': '+e(o.customer_note)+'</div>':'')
           +'</div>'
           +'<div class="order-row-right">'
-            +'<span class="badge '+st.cls+'" style="margin-bottom:2px">'+e(st.label)+'</span>'
+            +(canMarkDone?'<button data-admin-only="true" class="badge '+st.cls+'" style="margin-bottom:2px;cursor:pointer;border:0" onclick="App.admin.markOrderDone(\''+e(String(o.id||''))+'\')">'+e(st.label)+'</button>':'<span class="badge '+st.cls+'" style="margin-bottom:2px">'+e(st.label)+'</span>')
             +'<div class="order-row-total">฿'+Math.round(parseFloat(o.total||0)).toLocaleString('th-TH')+'</div>'
             +(st.accept?'<button data-admin-only="true" class="btn btn-accept-order" onclick="App.admin.acceptOrder(\''+e(String(o.id||''))+'\')">รับออเดอร์</button>':'')
+            +(canMarkDone?'<button data-admin-only="true" class="btn btn-secondary" style="width:auto;padding:4px 10px;font-size:12px;background:#dcfce7;border-color:#22c55e;color:#166534" onclick="App.admin.markOrderDone(\''+e(String(o.id||''))+'\')">งานเสร็จแล้ว</button>':'')
+            +(App.admin._canConfirmCashOrder(o)?'<button data-admin-only="true" class="btn btn-secondary" style="width:auto;padding:4px 10px;font-size:12px;background:#dcfce7;border-color:#22c55e;color:#166534" onclick="App.admin.confirmCashPayment(\''+e(String(o.id||''))+'\')">อัพเดทรับเงินสด</button>':'')
             +(!isCancelled?'<button data-admin-only="true" class="btn btn-secondary" style="width:auto;padding:4px 10px;font-size:12px;background:#fee2e2;border-color:#ef4444;color:#b91c1c" onclick="App.admin.cancelOrder(\''+e(String(o.id||''))+'\')">ยกเลิกออเดอร์</button>':'')
             +(!isCancelled?'<button class="btn-print-order" onclick="App.admin.openPrintModal('+oidx+')" title="พิมพ์ใบเสร็จ/สติ๊กเกอร์">🖨</button>':'')
           +'</div>'
