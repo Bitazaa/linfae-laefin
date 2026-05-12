@@ -4916,7 +4916,9 @@ var App={
       App.ui.toast('กำลังรีเฟรชออเดอร์...','info');
       App.admin._refreshOrdersAfterMutation({manual:true});
     },
-    _refreshOrdersAfterMutation:function(opts){
+    notifyOrdersChanged:function(reason){
+      App.admin._refreshOrdersAfterMutation({manual:true,reason:reason||''});
+    },    _refreshOrdersAfterMutation:function(opts){
       opts=opts||{};
       // force invalidate local cache view so next call always pulls latest from server
       App.admin._ordersViewCache={key:'',data:null};
@@ -5307,14 +5309,15 @@ var App={
       var allBtn=document.querySelector('#orders-date-row .filter-chip[data-daterange=\"all\"]');
       App.admin.filterDateRange('all',allBtn||null);
     },
-    _statusUi:function(status){
+    _statusUi:function(status,order){
       var s=String(status||'').toLowerCase();
-      if(s==='cancelled')return{label:'ยกเลิก',          cls:'badge-cancelled', accept:false};
-      if(s==='paid'||s==='pending')return{label:'ออเดอร์ใหม่', cls:'badge-new-blink', accept:true};
-      // cooking/done และสถานะอื่นๆ ที่ไม่ใช่ใหม่หรือยกเลิก ให้รวมเป็น "รับออเดอร์แล้ว"
-      return{label:'รับออเดอร์แล้ว', cls:'badge-cooking', accept:false};
-    },
-    _countNewOrders:function(){
+      var o=order||{};
+      var payStatus=String(o.payment_status||'').toLowerCase();
+      if(s==='cancelled')return{label:'ยกเลิก',cls:'badge-cancelled',accept:false};
+      if(s==='paid'||s==='pending')return{label:'ออเดอร์ใหม่',cls:'badge-new-blink',accept:true};
+      if(payStatus==='cash'||payStatus==='paid'||payStatus==='completed')return{label:'รับเงินแล้ว',cls:'badge-done',accept:false};
+      return{label:'รับออเดอร์แล้ว',cls:'badge-cooking',accept:false};
+    },    _countNewOrders:function(){
       return (App.admin._ordersData||[]).filter(function(o){
         var st=String(o&&o.status||'').trim().toLowerCase();
         return st==='paid'||st==='pending';
@@ -5684,7 +5687,7 @@ var App={
           });
           pendingItems=true;
         }
-        var st=App.admin._statusUi(o.status);
+        var st=App.admin._statusUi(o.status,o);
         var isCancelled=String(o&&o.status||'').trim().toLowerCase()==='cancelled';
         var stRaw=String(o&&o.status||'').trim().toLowerCase();
         var canMarkDone=(!isCancelled && stRaw!=='done' && stRaw!=='cancelled' && stRaw!=='pending' && stRaw!=='paid');
