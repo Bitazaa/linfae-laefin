@@ -2123,10 +2123,21 @@ var App={
     isGuest:function(){return String(App.state.adminRole||'').toLowerCase()==='guest';},
     isAdmin:function(){return String(App.state.adminRole||'').toLowerCase()==='admin';},
     canManageUsersApi:function(){return App.admin.isAdmin();},
-    ensureCanEdit:function(){
+    _auth:function(res){
+      if(!res)return false;
+      var ok=!(res&&res.success===false);
+      if(ok)return false;
+      var code=String(res.code||'').toUpperCase();
+      var msg=String(res.message||'');
+      var isAuthErr=(code==='UNAUTHORIZED'||code==='FORBIDDEN'||/unauthor|forbidden|token|login|permission|not allowed/i.test(msg));
+      if(isAuthErr){
+        App.ui.toast(msg||'สิทธิ์ไม่เพียงพอ หรือเซสชันหมดอายุ','warn');
+        return true;
+      }
+      return false;
+    },    ensureCanEdit:function(){
       if(!App.admin.isGuest())return true;
-      var role=String(App.state.adminRole||'guest');
-        if(!res||!res.success){App.ui.toast((res&&res.message)||'ยืนยันรับเงินสดไม่สำเร็จ','warn');return;}
+      App.ui.toast('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูล','warn');
       return false;
     },
     ensureCanManageUsersApi:function(){
@@ -5320,7 +5331,7 @@ var App={
       var method=String(o.payment_method||'').toLowerCase();
       var payStatus=String(o.payment_status||'').toLowerCase();
       var st=String(o.status||'').toLowerCase();
-      return method==='cash'&&st==='done'&&payStatus!=='cash';
+      return method==='cash'&&payStatus!=='cash'&&st!=='cancelled';
     },
     confirmCashPayment:function(orderId){
       if(!App.admin.ensureCanEdit())return;
@@ -5709,10 +5720,10 @@ var App={
             +(o.customer_note?'<div class="text-xs text-muted" style="margin-top:4px">💬 '+e(App.admin._customerNoteLabel())+': '+e(o.customer_note)+'</div>':'')
           +'</div>'
           +'<div class="order-row-right">'
-            +(canMarkDone?'<button data-admin-only="true" class="badge '+st.cls+'" style="margin-bottom:2px;cursor:pointer;border:0" onclick="App.admin.markOrderDone(\''+e(String(o.id||''))+'\')">'+e(st.label)+'</button>':'<span class="badge '+st.cls+'" style="margin-bottom:2px">'+e(st.label)+'</span>')
+            +'<span class="badge '+st.cls+'" style="margin-bottom:2px">'+e(st.label)+'</span>'
             +'<div class="order-row-total">฿'+Math.round(parseFloat(o.total||0)).toLocaleString('th-TH')+'</div>'
             +(st.accept?'<button data-admin-only="true" class="btn btn-accept-order" onclick="App.admin.acceptOrder(\''+e(String(o.id||''))+'\')">รับออเดอร์</button>':'')
-            +(canMarkDone?'<button data-admin-only="true" class="btn btn-secondary" style="width:auto;padding:4px 10px;font-size:12px;background:#dcfce7;border-color:#22c55e;color:#166534" onclick="App.admin.markOrderDone(\''+e(String(o.id||''))+'\')">งานเสร็จแล้ว</button>':'')
+
             +(App.admin._canConfirmCashOrder(o)?'<button data-admin-only="true" class="btn btn-secondary" style="width:auto;padding:4px 10px;font-size:12px;background:#dcfce7;border-color:#22c55e;color:#166534" onclick="App.admin.confirmCashPayment(\''+e(String(o.id||''))+'\')">อัพเดทรับเงินสด</button>':'')
             +(!isCancelled?'<button data-admin-only="true" class="btn btn-secondary" style="width:auto;padding:4px 10px;font-size:12px;background:#fee2e2;border-color:#ef4444;color:#b91c1c" onclick="App.admin.cancelOrder(\''+e(String(o.id||''))+'\')">ยกเลิกออเดอร์</button>':'')
             +(!isCancelled?'<button class="btn-print-order" onclick="App.admin.openPrintModal('+oidx+')" title="พิมพ์ใบเสร็จ/สติ๊กเกอร์">🖨</button>':'')
