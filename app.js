@@ -629,7 +629,7 @@ var App={
       App.customer.stopShopAvailabilityPoll();
       App.state._shopAvailabilityTimer=setInterval(function(){
         App.customer.refreshShopAvailability();
-      },12000);
+      },15000);
     },
     stopShopAvailabilityPoll:function(){
       if(App.state._shopAvailabilityTimer){clearInterval(App.state._shopAvailabilityTimer);App.state._shopAvailabilityTimer=null;}
@@ -2513,7 +2513,7 @@ var App={
         });
       }
       App.state.printing.ordersLoading=true;
-      App.api.call('getOrders',[{lite:true,page:1,pageSize:120},App.state.adminToken],function(res){
+      App.api.call('getOrders',[{lite:true,page:1,pageSize:40},App.state.adminToken],function(res){
         App.state.printing.ordersLoading=false;
         if(App.admin._auth(res))return;
         if(!res||!res.success)return;
@@ -3122,7 +3122,7 @@ var App={
         var pg=document.getElementById('apg-dashboard');
         if(!pg||!pg.classList.contains('active')){App.admin._stopDashboardAutoRefresh();return;}
         App.admin.loadDashboard(false,true);
-      },12000);
+      },15000);
     },
     _isShopOpenForDashboard:function(){
       var raw=App.state._settingsRaw||{};
@@ -3184,7 +3184,7 @@ var App={
         if(!App.admin._auth(res)&&res&&res.success)stats=res.data||{};
         doneOne();
       },reqOpt);
-      App.api.call('getOrders',[{page:1,pageSize:50,lite:true},App.state.adminToken],function(res){
+      App.api.call('getOrders',[{page:1,pageSize:30,lite:true},App.state.adminToken],function(res){
         if(!App.admin._auth(res)&&res&&res.success)ordersPayload=res.data||{};
         doneOne();
       },reqOpt);
@@ -4928,7 +4928,7 @@ var App={
       App.admin._ordersRefreshBusy=false;
       App.admin.loadOrders(true);
       // Apps Script/Sheet write latency can make first read stale; pull once more shortly after
-      setTimeout(function(){App.admin.loadOrders(true);},1000);
+      
       if(opts.manual){
         App.ui.toast('อัพเดทการรับเงินสดแล้ว','success');
       }
@@ -4949,7 +4949,7 @@ var App={
         return;
       }
       App.admin._ordersRetry=App.admin._ordersRetry||0;
-      var reqFilters=force?{_force:Date.now(),lite:true,page:1,pageSize:80}:{lite:true,page:1,pageSize:80};
+      var reqFilters=force?{_force:Date.now(),lite:true,page:1,pageSize:40}:{lite:true,page:1,pageSize:40};
       var lEl=document.getElementById('orders-loading'),eEl=document.getElementById('orders-error'),emEl=document.getElementById('orders-empty'),db=document.getElementById('orders-dashboard'),cc=document.getElementById('orders-cards');
       if(lEl)lEl.classList.remove('hidden');if(eEl)eEl.classList.add('hidden');if(emEl)emEl.classList.add('hidden');if(db)db.classList.add('hidden');if(cc)cc.innerHTML='';
       var tOut=setTimeout(function(){
@@ -5011,7 +5011,7 @@ var App={
               App.admin._silentRefreshOrders();
             }
           });
-      },12000);
+      },15000);
       // เมื่อ tab กลับมา focus ให้ poll ทันทีโดยไม่รอรอบถัดไป
       if(!App.admin._visibilityHandler){
         App.admin._visibilityHandler=function(){
@@ -5035,7 +5035,7 @@ var App={
       opts=opts||{};
       if(App.admin._ordersRefreshBusy)return;
       App.admin._ordersRefreshBusy=true;
-      var reqFilters=opts.force?{_force:Date.now(),lite:true,page:1,pageSize:80}:{lite:true,page:1,pageSize:80};
+      var reqFilters=opts.force?{_force:Date.now(),lite:true,page:1,pageSize:40}:{lite:true,page:1,pageSize:40};
       App.api.call('getOrders',[reqFilters,App.state.adminToken],function(res){
           App.admin._ordersRefreshBusy=false;
           if(!res||!res.success){
@@ -5574,7 +5574,7 @@ var App={
             var ta=Date.parse(String(a&&a.created_at||''))||0;
             var tb=Date.parse(String(b&&b.created_at||''))||0;
             return tb-ta;
-          }).slice(0,30);
+          }).slice(0,12);
           pendingNamesEl.innerHTML='<div class="kpi-card orders-kpi-card" style="padding:12px">'
             +'<div class="orders-kpi-top"><span class="orders-kpi-icon">👥</span><span class="orders-kpi-title">รายชื่อค้างชำระเงินสด (ล่าสุด)</span></div>'
             +'<div class="orders-kpi-sub" style="margin-top:6px">แสดง '+showList.length+' จากทั้งหมด '+pendingCashAll.length+' รายการ</div>'
