@@ -5502,6 +5502,7 @@ var App={
       if(lu)lu.textContent='อัปเดตล่าสุด: '+new Date().toLocaleTimeString('th-TH');
       var view=App.admin._getOrdersView({source:allData,ignoreDept:false});
       var orders=view.dateFiltered||[];
+      var nonCancelledOrders=orders.filter(function(o){return String(o&&o.status||'').trim().toLowerCase()!=='cancelled';});
       App.admin._updateAcceptAllBtnLabel();
 
       // สร้าง dept chips จากข้อมูลจริง
@@ -5518,7 +5519,7 @@ var App={
       // ─── Dashboard ───────────────────────────────────────────
       var sumWrap=document.getElementById('orders-summary');
       // คำนวณจาก orders ในช่วงที่เลือก (date filtered)
-      var totalRevenue=orders.reduce(function(s,o){return s+parseFloat(o.total||0);},0);
+      var totalRevenue=nonCancelledOrders.reduce(function(s,o){return s+parseFloat(o.total||0);},0);
       var _drLabels={'1':'วันนี้','7':'7 วัน','30':'30 วัน','all':'ทั้งหมด'};
       var _drLabel=_drLabels[App.admin._ordersFilterDate||'all']||'';
       if((App.admin._ordersFilterDate||'all')==='custom'){
@@ -5532,8 +5533,8 @@ var App={
       var kpiRow=document.getElementById('orders-kpi-row');
       if(kpiRow){
         kpiRow.innerHTML=[
-          {icon:'📦',label:'ออเดอร์ ('+_drLabel+')',val:orders.length,color:'var(--primary)',sub:'จำนวนรายการที่ตรงตามตัวกรอง'},
-          {icon:'💰',label:'ยอดเงิน ('+_drLabel+')',val:'฿'+Math.round(totalRevenue).toLocaleString('th-TH'),color:'var(--green)',sub:'รวมยอดจากออเดอร์ที่แสดง'}
+          {icon:'📦',label:'ออเดอร์ ('+_drLabel+')',val:nonCancelledOrders.length,color:'var(--primary)',sub:'ไม่รวมรายการที่ยกเลิก'},
+          {icon:'💰',label:'ยอดเงิน ('+_drLabel+')',val:'฿'+Math.round(totalRevenue).toLocaleString('th-TH'),color:'var(--green)',sub:'รวมยอดจากออเดอร์ที่ไม่ยกเลิก'}
         ].map(function(k){
           return '<div class="kpi-card orders-kpi-card">'
             +'<div class="orders-kpi-top"><span class="orders-kpi-icon">'+e(k.icon)+'</span><span class="orders-kpi-title">'+e(k.label)+'</span></div>'
@@ -6897,3 +6898,20 @@ App.print={};
 function toNum(v){var n=parseFloat(v);return isNaN(n)?0:n;}
 document.addEventListener('DOMContentLoaded',function(){App.init();});
 
+
+try{
+  if(typeof window!=='undefined'&&!window.__notifyOrdersChangedFallbackPatched){
+    window.__notifyOrdersChangedFallbackPatched=true;
+    setTimeout(function(){
+      try{
+        if(window.App&&App.admin&&typeof App.admin.notifyOrdersChanged!=='function'){
+          App.admin.notifyOrdersChanged=function(reason){
+            if(App.admin&&typeof App.admin._refreshOrdersAfterMutation==='function'){
+              App.admin._refreshOrdersAfterMutation({manual:true,reason:reason||''});
+            }
+          };
+        }
+      }catch(_){ }
+    },0);
+  }
+}catch(_){ }
