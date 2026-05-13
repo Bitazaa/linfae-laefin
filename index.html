@@ -1232,6 +1232,20 @@
                 <select id="bs-size" class="form-input" style="font-size:13px" onchange="App.admin.onPaperSelectChanged('bs-size','batch')"></select>
               </div>
               <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">รูปแบบสติ๊กเกอร์</label>
+                <select id="bs-template-mode" class="form-input" style="font-size:12px" onchange="App.admin.updateBatchPreview()"><option value="sticker_per_item">ต่อรายการอาหาร</option><option value="sticker_per_order">ต่อออเดอร์</option></select>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">วิธีนับจำนวน</label>
+                <select id="bs-item-qty-mode" class="form-input" style="font-size:12px" onchange="App.admin.updateBatchPreview()"><option value="repeat_each">พิมพ์ตามจำนวน</option><option value="show_qty">รวมจำนวนในดวงเดียว</option></select>
+              </div>
+              <div class="print-field-row"><label class="form-label" style="font-size:12px;margin-bottom:4px">กว้างสติ๊กเกอร์ (mm)</label><input type="number" id="bs-width-mm" class="form-input" style="font-size:12px" min="20" max="120" step="0.1" value="50" oninput="App.admin.updateBatchPreview()"></div>
+              <div class="print-field-row"><label class="form-label" style="font-size:12px;margin-bottom:4px">สูงสติ๊กเกอร์ (mm)</label><input type="number" id="bs-height-mm" class="form-input" style="font-size:12px" min="20" max="120" step="0.1" value="30" oninput="App.admin.updateBatchPreview()"></div>
+              <div class="print-field-row"><label class="form-label" style="font-size:12px;margin-bottom:4px">ระยะขอบ (mm)</label><input type="number" id="bs-margin-mm" class="form-input" style="font-size:12px" min="0" max="10" step="0.1" value="2" oninput="App.admin.updateBatchPreview()"></div>
+              <div class="print-field-row"><label class="form-label" style="font-size:12px;margin-bottom:4px">ขนาดตัวอักษร</label><input type="number" id="bs-font-scale" class="form-input" style="font-size:12px" min="0.6" max="2" step="0.1" value="1" oninput="App.admin.updateBatchPreview()"></div>
+              <div class="print-field-row">
+              </div>
+              <div class="print-field-row">
                 <label class="form-label" style="font-size:12px;margin-bottom:4px">แนวกระดาษ</label>
                 <select id="bs-orientation" class="form-input" style="font-size:12px" onchange="App.admin.onOrientationChanged('bs-orientation','batch')">
                   <option value="portrait">แนวตั้ง</option>
@@ -1450,6 +1464,20 @@
               <div class="print-field-row">
                 <label class="form-label" style="font-size:13px;margin-bottom:4px">ขนาดสติ๊กเกอร์</label>
                 <select id="ss-size" class="form-input" style="font-size:13px" onchange="App.admin.onPaperSelectChanged('ss-size','single')"></select>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">รูปแบบสติ๊กเกอร์</label>
+                <select id="ss-template-mode" class="form-input" style="font-size:12px" onchange="App.admin.updatePrintPreview()"><option value="sticker_per_item">ต่อรายการอาหาร</option><option value="sticker_per_order">ต่อออเดอร์</option></select>
+              </div>
+              <div class="print-field-row">
+                <label class="form-label" style="font-size:12px;margin-bottom:4px">วิธีนับจำนวน</label>
+                <select id="ss-item-qty-mode" class="form-input" style="font-size:12px" onchange="App.admin.updatePrintPreview()"><option value="repeat_each">พิมพ์ตามจำนวน</option><option value="show_qty">รวมจำนวนในดวงเดียว</option></select>
+              </div>
+              <div class="print-field-row"><label class="form-label" style="font-size:12px;margin-bottom:4px">กว้างสติ๊กเกอร์ (mm)</label><input type="number" id="ss-width-mm" class="form-input" style="font-size:12px" min="20" max="120" step="0.1" value="50" oninput="App.admin.updatePrintPreview()"></div>
+              <div class="print-field-row"><label class="form-label" style="font-size:12px;margin-bottom:4px">สูงสติ๊กเกอร์ (mm)</label><input type="number" id="ss-height-mm" class="form-input" style="font-size:12px" min="20" max="120" step="0.1" value="30" oninput="App.admin.updatePrintPreview()"></div>
+              <div class="print-field-row"><label class="form-label" style="font-size:12px;margin-bottom:4px">ระยะขอบ (mm)</label><input type="number" id="ss-margin-mm" class="form-input" style="font-size:12px" min="0" max="10" step="0.1" value="2" oninput="App.admin.updatePrintPreview()"></div>
+              <div class="print-field-row"><label class="form-label" style="font-size:12px;margin-bottom:4px">ขนาดตัวอักษร</label><input type="number" id="ss-font-scale" class="form-input" style="font-size:12px" min="0.6" max="2" step="0.1" value="1" oninput="App.admin.updatePrintPreview()"></div>
+              <div class="print-field-row">
               </div>
               <div class="print-field-row">
                 <label class="form-label" style="font-size:12px;margin-bottom:4px">แนวกระดาษ</label>
@@ -1861,5 +1889,6 @@
 <script src="app.js"></script>
 </body>
 </html>
+
 
 
