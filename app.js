@@ -3146,12 +3146,26 @@ var App={
       loadSettings:function(){
         App.api.call('getSettings',[App.state.adminToken],function(res){
           if(!res||!res.success||!res.data)return;
+          var s=res.data||{};
           App.state.printing.method='browser';
           App.state.printing.btAutoConnect=false;
           ['sticker','receipt'].forEach(function(tab){
             var m=document.getElementById('printing-method-'+tab);
             if(m)m.value=App.state.printing.method;
           });
+          var setVal=function(id,val){var el=document.getElementById(id);if(el)el.value=val;};
+          setVal('ss-width-mm',String(s.sticker_width_mm||'50'));
+          setVal('ss-height-mm',String(s.sticker_height_mm||'30'));
+          setVal('ss-margin-mm',String(s.sticker_margin_mm||'2'));
+          setVal('ss-font-scale',String(s.sticker_font_scale||'1'));
+          setVal('ss-template-mode',String(s.sticker_template||'sticker_per_item'));
+          setVal('ss-item-qty-mode',String(s.sticker_item_qty_mode||'repeat_each'));
+          setVal('bs-width-mm',String(s.sticker_width_mm||'50'));
+          setVal('bs-height-mm',String(s.sticker_height_mm||'30'));
+          setVal('bs-margin-mm',String(s.sticker_margin_mm||'2'));
+          setVal('bs-font-scale',String(s.sticker_font_scale||'1'));
+          setVal('bs-template-mode',String(s.sticker_template||'sticker_per_item'));
+          setVal('bs-item-qty-mode',String(s.sticker_item_qty_mode||'repeat_each'));
         },{silent:true,noLoader:true,key:'printing_settings'});
       },
       saveSettings:function(){
@@ -3163,7 +3177,18 @@ var App={
           var m=document.getElementById('printing-method-'+tab);
           if(m)m.value=App.state.printing.method;
         });
-        App.api.call('saveSettings',[{print_method:'browser',bluetooth_auto_connect:'0'},App.state.adminToken],function(res){
+        var gv=function(id,def){var el=document.getElementById(id);var v=String(el&&el.value||'').trim();return v||def;};
+        var payload={
+          print_method:'browser',
+          bluetooth_auto_connect:'0',
+          sticker_width_mm:gv('ss-width-mm','50'),
+          sticker_height_mm:gv('ss-height-mm','30'),
+          sticker_margin_mm:gv('ss-margin-mm','2'),
+          sticker_font_scale:gv('ss-font-scale','1'),
+          sticker_template:gv('ss-template-mode','sticker_per_item'),
+          sticker_item_qty_mode:gv('ss-item-qty-mode','repeat_each')
+        };
+        App.api.call('saveSettings',[payload,App.state.adminToken],function(res){
           if(!res||!res.success)return;
           App.ui.toast('บันทึกการตั้งค่าการพิมพ์แล้ว','success');
         },{silent:true,noLoader:true,key:'save_printing_settings'});
@@ -6818,6 +6843,66 @@ var App={
     closePrintModal:function(){
       var m=document.getElementById('print-modal');if(m)m.classList.remove('active');
     },
+    _getStickerTemplateMode:function(scope){
+      var id=(scope==='batch')?'bs-template-mode':'ss-template-mode';
+      var el=document.getElementById(id);
+      var v=String(el&&el.value||'sticker_per_item').trim();
+      return (v==='sticker_per_order')?'sticker_per_order':'sticker_per_item';
+    },
+    _getStickerQtyMode:function(scope){
+      var id=(scope==='batch')?'bs-item-qty-mode':'ss-item-qty-mode';
+      var el=document.getElementById(id);
+      var v=String(el&&el.value||'repeat_each').trim();
+      return (v==='show_qty')?'show_qty':'repeat_each';
+    },
+    _getStickerPaperCfg:function(scope){
+      var p=(scope==='batch')?'bs':'ss';
+      var num=function(id,def,min,max){
+        var el=document.getElementById(id);
+        var n=parseFloat(el&&el.value||def);
+        if(!isFinite(n)||isNaN(n))n=def;
+        if(min!=null&&n<min)n=min;
+        if(max!=null&&n>max)n=max;
+        return n;
+      };
+      return {
+        widthMm:num(p+'-width-mm',50,20,120),
+        heightMm:num(p+'-height-mm',30,20,120),
+        marginMm:num(p+'-margin-mm',2,0,10),
+        fontScale:num(p+'-font-scale',1,0.6,2)
+      };
+    },
+    _expandOrdersForSticker:function(orders,scope){
+      var rows=Array.isArray(orders)?orders:[];
+      var mode=App.admin._getStickerTemplateMode(scope);
+      if(mode==='sticker_per_order')return rows;
+      var qtyMode=App.admin._getStickerQtyMode(scope);
+      var out=[];
+      rows.forEach(function(o){
+        var items=Array.isArray(o&&o.items)?o.items:[];
+        if(!items.length){out.push(o);return;}
+        items.forEach(function(it){
+          var q=Math.max(1,parseInt(it&&it.qty||1,10)||1);
+          if(qtyMode==='repeat_each'){
+            for(var i=0;i<q;i++){
+              var one=JSON.parse(JSON.stringify(o||{}));
+              var item=JSON.parse(JSON.stringify(it||{}));
+              item.qty=1;
+              one.items=[item];
+              one.__stickerItemMode=true;
+              out.push(one);
+            }
+          }else{
+            var one2=JSON.parse(JSON.stringify(o||{}));
+            var item2=JSON.parse(JSON.stringify(it||{}));
+            one2.items=[item2];
+            one2.__stickerItemMode=true;
+            out.push(one2);
+          }
+        });
+      });
+      return out;
+    },
     switchPrintTab:function(tab,btn){
       App.admin._printTab=tab;
       document.querySelectorAll('.print-tab[id^="ptab"]').forEach(function(t){t.classList.remove('active');});
@@ -6839,12 +6924,32 @@ var App={
       if(!(Array.isArray(order.items)&&order.items.length)){
         wrap.innerHTML='<div style="color:var(--text2);font-size:13px;padding:20px">กำลังโหลดรายการอาหาร...</div>';
         App.admin._ensureOrderItemsLoaded(order,function(){
-          var html2=App.admin._buildSinglePrintHTML(order,App.admin._printTab,window._restaurantName||'FoodOrder',App.admin._gv,'single');
+          var tab2=App.admin._printTab||'receipt';
+          if(tab2==='sticker'){
+            var labels2=App.admin._expandOrdersForSticker([order],'single');
+            var prev2=labels2.slice(0,4);
+            var h2='';
+            prev2.forEach(function(x){h2+=App.admin._buildSinglePrintHTML(x,tab2,window._restaurantName||'FoodOrder',App.admin._gv,'single')||'';});
+            if(labels2.length>4)h2+='<div style="font-size:12px;color:var(--text2);padding:8px;text-align:center;width:100%">...และอีก '+(labels2.length-4)+' สติ๊กเกอร์</div>';
+            wrap.innerHTML=h2||'<div style="color:var(--text2);font-size:13px;padding:20px">ไม่สามารถสร้างตัวอย่างได้</div>';
+            return;
+          }
+          var html2=App.admin._buildSinglePrintHTML(order,tab2,window._restaurantName||'FoodOrder',App.admin._gv,'single');
           wrap.innerHTML=html2||'<div style="color:var(--text2);font-size:13px;padding:20px">ไม่สามารถสร้างตัวอย่างได้</div>';
         });
         return;
       }
-      var html=App.admin._buildSinglePrintHTML(order,App.admin._printTab,window._restaurantName||'FoodOrder',App.admin._gv,'single');
+      var tab=App.admin._printTab||'receipt';
+      if(tab==='sticker'){
+        var labels=App.admin._expandOrdersForSticker([order],'single');
+        var preview=labels.slice(0,4);
+        var htmlS='';
+        preview.forEach(function(x){htmlS+=App.admin._buildSinglePrintHTML(x,tab,window._restaurantName||'FoodOrder',App.admin._gv,'single')||'';});
+        if(labels.length>4)htmlS+='<div style="font-size:12px;color:var(--text2);padding:8px;text-align:center;width:100%">...และอีก '+(labels.length-4)+' สติ๊กเกอร์</div>';
+        wrap.innerHTML=htmlS||'<div style="color:var(--text2);font-size:13px;padding:20px">ไม่สามารถสร้างตัวอย่างได้</div>';
+        return;
+      }
+      var html=App.admin._buildSinglePrintHTML(order,tab,window._restaurantName||'FoodOrder',App.admin._gv,'single');
       wrap.innerHTML=html||'<div style="color:var(--text2);font-size:13px;padding:20px">ไม่สามารถสร้างตัวอย่างได้</div>';
     },
     doPrint:function(skipEnsure){
@@ -6864,13 +6969,15 @@ var App={
       var rCal=App.admin._getReceiptCalibration('single');
       var recSpec=App.admin._paperSizeToPageSpec(size,rCal.scale,orientation);
       var receiptPageSize=recSpec.pageSpec;
-      var stickerPageSize=App.admin._stickerSizeToPageSize(stickerSize,orientation);
+      var stickerCfg=App.admin._getStickerPaperCfg('single');
+      var stickerPageSize=Math.round(stickerCfg.widthMm*100)/100+'mm '+Math.round(stickerCfg.heightMm*100)/100+'mm';
       var pageSize=tab==='receipt'?receiptPageSize:stickerPageSize;
       var printWidth=tab==='receipt'
         ?App.admin._pageSpecToFrameWidth(receiptPageSize,recSpec.previewWidth)
-        :App.admin._pageSpecToFrameWidth(stickerPageSize,'100mm');
+        :(Math.round(stickerCfg.widthMm*100)/100)+'mm';
       var pageMargin='0';
       var bodyPad='0';
+      var targets=(tab==='sticker')?App.admin._expandOrdersForSticker([order],'single'):[order];
       var iw=document.createElement('iframe');
       iw.style.cssText='position:fixed;top:-9999px;left:-9999px;width:'+printWidth+';height:auto;border:none';
       document.body.appendChild(iw);
@@ -6878,9 +6985,9 @@ var App={
       doc.open();
       doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+shopName+' - พิมพ์</title>');
       doc.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap">');
-      doc.write('<style>*{box-sizing:border-box;margin:0;padding:0}html,body{width:'+printWidth+'}body{font-family:\'Prompt\',monospace;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:'+bodyPad+'}@media print{body{margin:0;padding:0}@page{margin:'+pageMargin+';size:'+pageSize+'}.rp-receipt,.rp-sticker{border:none!important;border-radius:0!important;page-break-inside:avoid!important;break-inside:avoid-page!important}.rp-receipt{width:100%!important;max-width:100%!important;padding:2mm 2.4mm!important;overflow:hidden}}.rp-sticker{display:block;margin:0}</style>');
+      doc.write('<style>*{box-sizing:border-box;margin:0;padding:0}html,body{width:'+printWidth+'}body{font-family:\'Prompt\',monospace;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:'+bodyPad+'}@media print{body{margin:0;padding:0}@page{margin:'+pageMargin+';size:'+pageSize+'}.rp-receipt,.rp-sticker{border:none!important;border-radius:0!important;page-break-inside:avoid!important;break-inside:avoid-page!important}.rp-receipt{width:100%!important;max-width:100%!important;padding:2mm 2.4mm!important;overflow:hidden}.rp-sticker{break-after:page!important;page-break-after:always!important}}.rp-sticker{display:block;margin:0}</style>');
       doc.write('</head><body>');
-      doc.write(App.admin._buildSinglePrintHTML(order,tab,shopName,App.admin._gv,'single')||'');
+      targets.forEach(function(row){doc.write(App.admin._buildSinglePrintHTML(row,tab,shopName,App.admin._gv,'single')||'');});
       doc.write('</body></html>');
       doc.close();
       setTimeout(function(){
@@ -7330,11 +7437,13 @@ var App={
           return;
         }
       }
+      var source=(tab==='sticker')?App.admin._expandOrdersForSticker(previewOrders,'batch'):previewOrders;
+      var viewRows=source.slice(0,8);
       var html='';
-      previewOrders.forEach(function(o){
+      viewRows.forEach(function(o){
         html+=App.admin._buildSinglePrintHTML(o,tab,shopName,App.admin._gv,'batch')||'';
       });
-      if(orders.length>6)html+='<div style="font-size:12px;color:var(--text2);padding:8px;text-align:center;width:100%">...และอีก '+(orders.length-6)+' ออเดอร์</div>';
+      if(source.length>8)html+='<div style="font-size:12px;color:var(--text2);padding:8px;text-align:center;width:100%">...และอีก '+(source.length-8)+' สติ๊กเกอร์</div>';
       wrap.innerHTML=html;
     },
     doBatchPrint:function(skipEnsure){
@@ -7352,16 +7461,17 @@ var App={
       var shopName=window._restaurantName||'FoodOrder';
       var orientation=App.admin._getOrientationByContext('batch',tab);
       var receiptSize=App.admin._resolvePaperSize('bp-paper','bp-paper-custom','80mm');
-      var stickerSize=App.admin._resolveStickerSize('bs-size','bs-size-custom','100x70');
       var brCal=App.admin._getReceiptCalibration('batch');
       var bRecSpec=App.admin._paperSizeToPageSpec(receiptSize,brCal.scale,orientation);
       var bReceiptPageSize=bRecSpec.pageSpec;
-      var bStickerPageSize=App.admin._stickerSizeToPageSize(stickerSize,orientation);
+      var stickerCfg=App.admin._getStickerPaperCfg('batch');
+      var bStickerPageSize=Math.round(stickerCfg.widthMm*100)/100+'mm '+Math.round(stickerCfg.heightMm*100)/100+'mm';
       var pageSize=tab==='receipt'?bReceiptPageSize:bStickerPageSize;
       var frameWidth=tab==='receipt'
         ?App.admin._pageSpecToFrameWidth(bReceiptPageSize,bRecSpec.previewWidth)
-        :App.admin._pageSpecToFrameWidth(bStickerPageSize,'100mm');
+        :(Math.round(stickerCfg.widthMm*100)/100)+'mm';
       var pageMargin='0';
+      var targets=(tab==='sticker')?App.admin._expandOrdersForSticker(orders,'batch'):orders;
       var iw=document.createElement('iframe');
       iw.style.cssText='position:fixed;top:-9999px;left:-9999px;width:'+frameWidth+';height:auto;border:none';
       document.body.appendChild(iw);
@@ -7369,10 +7479,10 @@ var App={
       doc.open();
       doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+shopName+' - พิมพ์ทั้งหมด</title>');
       doc.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap">');
-      doc.write('<style>*{box-sizing:border-box;margin:0;padding:0}html,body{width:'+frameWidth+'}body{font-family:\'Prompt\',monospace;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{margin:0}@page{margin:'+pageMargin+';size:'+pageSize+'}.rp-receipt,.rp-sticker{border:none!important;border-radius:0!important;page-break-after:always;page-break-inside:avoid!important;break-inside:avoid-page!important}.rp-receipt{width:100%!important;max-width:100%!important;padding:2mm 2.4mm!important;overflow:hidden}}.rp-sticker{display:block;margin:0}.batch-sticker-wrap{display:flex;flex-direction:column;flex-wrap:nowrap;align-items:flex-start;gap:0;padding:0}</style>');
+      doc.write('<style>*{box-sizing:border-box;margin:0;padding:0}html,body{width:'+frameWidth+'}body{font-family:\'Prompt\',monospace;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{margin:0}@page{margin:'+pageMargin+';size:'+pageSize+'}.rp-receipt,.rp-sticker{border:none!important;border-radius:0!important;page-break-after:always;page-break-inside:avoid!important;break-inside:avoid-page!important}.rp-receipt{width:100%!important;max-width:100%!important;padding:2mm 2.4mm!important;overflow:hidden}.rp-sticker{break-after:page!important;page-break-after:always!important}}.rp-sticker{display:block;margin:0}.batch-sticker-wrap{display:flex;flex-direction:column;flex-wrap:nowrap;align-items:flex-start;gap:0;padding:0}</style>');
       doc.write('</head><body>');
       if(tab==='sticker'){doc.write('<div class="batch-sticker-wrap">');}
-      orders.forEach(function(o){
+      targets.forEach(function(o){
         var html=App.admin._buildSinglePrintHTML(o,tab,shopName,App.admin._gv,'batch');
         if(html)doc.write(html);
       });
@@ -7554,7 +7664,7 @@ var App={
         return html;
       } else {
         // sticker
-        var sizeVal=mode==='batch'?App.admin._resolveStickerSize('bs-size','bs-size-custom','100x70'):App.admin._resolveStickerSize('ss-size','ss-size-custom','100x70');
+        var paperCfg=App.admin._getStickerPaperCfg(mode==='batch'?'batch':'single');
         var orientation=App.admin._getOrientationByContext(mode,tab);
         var textScale2=App.admin._getPrintTextScale(mode,tab);
         var lineScale2=App.admin._getPrintLineHeightScale(mode,tab);
@@ -7562,15 +7672,15 @@ var App={
         var sStyle=stEl?stEl.value:'minimal';
         if(sStyle==='clean')sStyle='minimal';
         var cal=App.admin._getStickerCalibration(mode);
-        var sp=sizeVal.split('x');
-        var wMm=parseFloat(sp[0]||100);
-        var hMm=parseFloat(sp[1]||70);
+        var wMm=parseFloat(paperCfg.widthMm||50);
+        var hMm=parseFloat(paperCfg.heightMm||30);
         if(orientation==='landscape'){var tmp=wMm;wMm=hMm;hMm=tmp;}
         var sw=(Math.round((wMm*cal.scale)*100)/100)+'mm';
         var sh2=(Math.round((hMm*cal.scale)*100)/100)+'mm';
+        var fontScaleCfg=Math.max(0.6,Math.min(2,parseFloat(paperCfg.fontScale||1)||1));
         var scale=Math.sqrt((Math.max(1,wMm)*Math.max(1,hMm))/(100*70));
         scale=Math.max(0.55,Math.min(1.8,scale));
-        var basePxRaw2=13*scale*textScale2;
+        var basePxRaw2=13*scale*textScale2*fontScaleCfg;
         var padVRaw2=12*scale*textScale2;
         var padHRaw2=14*scale*textScale2;
         var showSticker={
@@ -7623,6 +7733,10 @@ var App={
             html2+='<div style="font-size:'+fs(isBold?14:13,8)+'px;margin-bottom:'+fs(2,1)+'px;display:flex;justify-content:space-between"><span>'+String(it.name||'')+'</span>'+(q2>1?'<span style="font-weight:700;color:'+txColor+'">×'+q2+'</span>':'')+'</div>';
             if(labels2.length){
               html2+='<div style="font-size:'+fs(11,7)+'px;color:'+subColor+';margin-bottom:'+fs(3,1)+'px;padding-left:'+fs(6,3)+'px">• '+labels2.join(', ')+'</div>';
+            }
+            var lineComment2=String(it&&(it.item_comment||it.comment)||'').trim();
+            if(lineComment2){
+              html2+='<div style="font-size:'+fs(11,7)+'px;color:'+subColor+';margin-bottom:'+fs(3,1)+'px;padding-left:'+fs(6,3)+'px">💬 '+App.u.esc(lineComment2)+'</div>';
             }
           });
           if(items2.length>5)html2+='<div style="font-size:'+fs(11,7)+'px;color:'+subColor+'">+อีก '+(items2.length-5)+' รายการ</div>';
