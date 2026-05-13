@@ -6008,11 +6008,15 @@ var App={
       var allBtn=document.querySelector('#orders-date-row .filter-chip[data-daterange=\"all\"]');
       App.admin.filterDateRange('all',allBtn||null);
     },
+    _isCancelledOrderStatus:function(status){
+      var s=String(status||'').trim().toLowerCase();
+      return s==='cancelled'||s==='cancel'||s==='canceled'||s==='void'||s==='refunded'||s==='timeout';
+    },
     _statusUi:function(status,order){
       var s=String(status||'').toLowerCase();
       var o=order||{};
       var payStatus=String(o.payment_status||'').toLowerCase();
-      if(s==='cancelled')return{label:'ยกเลิก',cls:'badge-cancelled',accept:false};
+      if(App.admin._isCancelledOrderStatus(s))return{label:'ยกเลิก',cls:'badge-cancelled',accept:false};
       if(s==='paid'||s==='pending')return{label:'ออเดอร์ใหม่',cls:'badge-new-blink',accept:true};
       if(payStatus==='cash'||payStatus==='paid'||payStatus==='completed')return{label:'รับเงินแล้ว',cls:'badge-done',accept:false};
       return{label:'รับออเดอร์แล้ว',cls:'badge-cooking',accept:false};
@@ -6201,7 +6205,7 @@ var App={
       if(lu)lu.textContent='อัปเดตล่าสุด: '+new Date().toLocaleTimeString('th-TH');
       var view=App.admin._getOrdersView({source:allData,ignoreDept:false});
       var orders=view.dateFiltered||[];
-      var nonCancelledOrders=orders.filter(function(o){return String(o&&o.status||'').trim().toLowerCase()!=='cancelled';});
+      var nonCancelledOrders=orders.filter(function(o){return !App.admin._isCancelledOrderStatus(o&&o.status);});
       App.admin._updateAcceptAllBtnLabel();
 
       // สร้าง dept chips จากข้อมูลจริง
@@ -6342,9 +6346,10 @@ var App={
           +'</svg>'
           +'<div class="orders-sales-labels">'+daily.map(function(it){return'<span>'+it.label+'</span>';}).join('')+'</div>';
       }
-      // อันดับเมนู — นับจาก orders ทั้งหมด
+      // อันดับเมนู — ตัดสถานะยกเลิกออกก่อนนับ
       var menuCount={};
-      orders.forEach(function(o){
+      var rankingOrders=orders.filter(function(o){return !App.admin._isCancelledOrderStatus(o&&o.status);});
+      rankingOrders.forEach(function(o){
         (o.items||[]).forEach(function(it){
           var n=String(it.name||'').trim();if(!n)return;
           menuCount[n]=(menuCount[n]||0)+parseInt(it.qty||1);
@@ -7718,5 +7723,4 @@ try{
     },0);
   }
 }catch(_){ }
-
 
