@@ -521,7 +521,7 @@
         <div class="notify-footer-actions">
           <div style="margin-right:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <label class="toggle-switch">
-              <input type="checkbox" id="n-include-admin-link">
+              <input type="checkbox" id="n-include-admin-link" onchange="App.admin.toggleNotificationAdminLink()">
               <span class="toggle-slider"></span>
             </label>
             <div class="text-xs text-muted">
@@ -530,6 +530,11 @@
             </div>
           </div>
           <button id="save-notification-btn" class="btn btn-primary" style="width:auto;min-width:190px" onclick="App.admin.saveNotificationSettings()">บันทึกการตั้งค่าแจ้งเตือน</button>
+        </div>
+        <div id="n-admin-link-url-wrap" class="form-group hidden" style="margin-top:10px">
+          <label class="form-label">ลิงก์หน้าแอดมิน / GitHub Pages URL</label>
+          <input id="n-admin-link-url" type="url" class="form-input" placeholder="https://foodflowapp999.github.io/food-order/?admin=1">
+          <div class="text-xs text-muted" style="margin-top:4px">ต้องเป็น URL ที่ขึ้นต้นด้วย https:// เท่านั้น</div>
         </div>
         <div class="text-xs text-muted" style="margin-top:4px">ระบบจะพยายามส่งซ้ำอัตโนมัติหากล้มเหลว</div>
       </div>
@@ -643,9 +648,9 @@
             <div class="card p-4" style="margin-bottom:14px">
               <div class="section-header" style="margin-bottom:12px"><h3 style="font-weight:700;font-size:15px">🏦 บัญชีธนาคาร</h3><button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.addBankSlide()">+ เพิ่มบัญชี</button></div>
               <div id="bank-list-admin"></div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-                <button id="save-settings-payment-btn" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.saveSettingsTab('payment')">บันทึกการชำระเงิน</button>
-              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;margin-bottom:14px">
+              <button id="save-settings-payment-btn" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.saveSettingsTab('payment')">บันทึกการชำระเงิน</button>
             </div>
           </div>
 
@@ -659,13 +664,38 @@
               <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">📅 ช่วงเวลาเปิดร้าน</h3>
               <div class="form-group">
                 <label class="form-label">วันเวลาเริ่มเปิด</label>
-                <input id="s-open-start" type="datetime-local" class="form-input">
+                <div class="calendar-range-row">
+                  <input id="s-open-start-date" type="text" class="form-input calendar-range-input" placeholder="เลือกวันที่เริ่ม" readonly onclick="App.admin.openDatePickerPopup('shop-hours','openStartDate')">
+                  <input id="s-open-start-time-display" type="text" class="form-input calendar-range-input" style="max-width:130px" placeholder="เลือกเวลา" readonly onclick="App.admin.openTimePickerPopup('shop-hours','openStartTime')">
+                  <button class="btn btn-secondary calendar-range-btn" type="button" onclick="App.admin.openDatePickerPopup('shop-hours','openStartDate')">เลือกวันที่</button>
+                  <button class="btn btn-secondary calendar-range-btn" type="button" onclick="App.admin.openTimePickerPopup('shop-hours','openStartTime')">🕒 เลือกเวลา</button>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+                  <button class="btn btn-ghost" type="button" style="width:auto;padding:6px 10px;font-size:12px" onclick="App.admin.quickSetShopHoursDate('start','today')">วันนี้</button>
+                  <button class="btn btn-ghost" type="button" style="width:auto;padding:6px 10px;font-size:12px" onclick="App.admin.quickSetShopHoursDate('start','tomorrow')">พรุ่งนี้</button>
+                  <button class="btn btn-ghost" type="button" style="width:auto;padding:6px 10px;font-size:12px" onclick="App.admin.quickSetShopHoursDate('start','clear')">ล้างวันที่</button>
+                </div>
+                <input id="s-open-start-time" type="hidden">
+                <input id="s-open-start" type="hidden">
               </div>
               <div class="form-group">
                 <label class="form-label">วันเวลาสิ้นสุดการเปิด</label>
-                <input id="s-open-end" type="datetime-local" class="form-input">
+                <div class="calendar-range-row">
+                  <input id="s-open-end-date" type="text" class="form-input calendar-range-input" placeholder="เลือกวันที่สิ้นสุด" readonly onclick="App.admin.openDatePickerPopup('shop-hours','openEndDate')">
+                  <input id="s-open-end-time-display" type="text" class="form-input calendar-range-input" style="max-width:130px" placeholder="เลือกเวลา" readonly onclick="App.admin.openTimePickerPopup('shop-hours','openEndTime')">
+                  <button class="btn btn-secondary calendar-range-btn" type="button" onclick="App.admin.openDatePickerPopup('shop-hours','openEndDate')">เลือกวันที่</button>
+                  <button class="btn btn-secondary calendar-range-btn" type="button" onclick="App.admin.openTimePickerPopup('shop-hours','openEndTime')">🕒 เลือกเวลา</button>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+                  <button class="btn btn-ghost" type="button" style="width:auto;padding:6px 10px;font-size:12px" onclick="App.admin.quickSetShopHoursDate('end','today')">วันนี้</button>
+                  <button class="btn btn-ghost" type="button" style="width:auto;padding:6px 10px;font-size:12px" onclick="App.admin.quickSetShopHoursDate('end','tomorrow')">พรุ่งนี้</button>
+                  <button class="btn btn-ghost" type="button" style="width:auto;padding:6px 10px;font-size:12px" onclick="App.admin.quickSetShopHoursDate('end','clear')">ล้างวันที่</button>
+                </div>
+                <input id="s-open-end-time" type="hidden">
+                <input id="s-open-end" type="hidden">
               </div>
               <p class="text-xs text-muted">ถ้าเว้นว่างทั้งสองช่อง จะใช้แค่สวิตช์เปิด/ปิดร้าน</p>
+              <p id="shop-hours-preview" class="text-xs text-muted" style="margin-top:4px">ช่วงเวลา: ใช้ตามสวิตช์เปิด/ปิดร้าน</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
                 <button id="save-settings-shop-hours-btn" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.saveSettingsTab('shop-hours')">บันทึกเวลาเปิด-ปิด</button>
               </div>
@@ -683,73 +713,26 @@
           <!-- TAB: Google Drive -->
           <div id="stab-drive" class="stab-panel">
             <div class="card p-4" style="margin-bottom:14px">
-              <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">📁 Google Drive</h3>
+              <h3 style="font-weight:700;margin-bottom:14px;font-size:15px">📁 Google Drive Center</h3>
               <div class="drive-folder-status-card">
-                <div class="text-sm" style="font-weight:700;margin-bottom:4px">สถานะโฟลเดอร์รูปเมนู</div>
-                <div id="api-drive-folder-status" class="text-xs text-muted" style="line-height:1.5">ยังไม่ได้สร้างโฟลเดอร์</div>
+                <div class="text-sm" style="font-weight:700;margin-bottom:4px">สถานะการเชื่อมต่อ</div>
+                <div id="api-drive-folder-status" class="drive-status-text is-idle">ยังไม่ได้ตั้งค่า</div>
                 <div id="api-drive-folder-meta" class="text-xs text-muted" style="margin-top:6px;line-height:1.5"></div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-                  <button id="btn-copy-drive-id" class="btn btn-ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="App.admin.copyDriveFolderId()">คัดลอก Folder ID</button>
-                  <a id="btn-open-drive-folder" class="btn btn-secondary" style="display:none;width:auto;padding:6px 12px;font-size:12px" target="_blank" rel="noopener">เปิดโฟลเดอร์ใน Google Drive</a>
-                </div>
               </div>
-              <div class="form-group" style="margin-top:10px"><label class="form-label">ชื่อโฟลเดอร์ (อัตโนมัติ)</label><input id="s-drive-folder-name" type="text" class="form-input" value="FoodOrder Menu Images" placeholder="FoodOrder Menu Images"></div>
+              <div class="form-group" style="margin-top:10px"><label class="form-label">ชื่อโฟลเดอร์ (สร้างอัตโนมัติ)</label><input id="s-drive-folder-name" type="text" class="form-input" value="FoodFlow/Menu Images" placeholder="FoodFlow/Menu Images"></div>
               <div class="text-xs text-muted" style="margin-top:-2px;margin-bottom:8px;line-height:1.5">
-                ระบบจะสร้างโฟลเดอร์ใน Google Drive ของบัญชีที่ Deploy Web App และบันทึก Folder ID ให้อัตโนมัติ
+                แนะนำให้กด “สร้าง/เชื่อมต่อโฟลเดอร์อัตโนมัติ” ระบบจะบันทึก Folder ID ให้อัตโนมัติ
               </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                <button id="btn-create-drive-folder" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.createMenuImageFolder()">สร้างโฟลเดอร์อัตโนมัติ</button>
+              <div class="drive-center-actions">
+                <button id="btn-create-drive-folder" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.createMenuImageFolder()">สร้าง/เชื่อมต่อโฟลเดอร์อัตโนมัติ</button>
                 <button id="btn-test-drive" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.testGoogleDriveConnection()">ตรวจสอบ Google Drive</button>
-                <span id="api-drive-status" class="text-sm text-muted">ยังไม่ได้ตรวจสอบ</span>
+                <button id="btn-open-drive-folder" class="btn btn-secondary" type="button" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.openDriveFolder()">เปิดโฟลเดอร์</button>
+                <button id="btn-copy-drive-id" class="btn btn-ghost" type="button" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.copyDriveFolderId()">คัดลอก Folder ID</button>
               </div>
-              <div style="margin-top:10px">
-                <button class="btn btn-ghost" type="button" style="width:auto;padding:6px 12px;font-size:12px" onclick="App.admin.toggleDriveAdvancedSettings()">ตั้งค่าขั้นสูง</button>
-              </div>
-              <div id="drive-advanced-panel" class="drive-advanced-panel">
-                <div class="form-group" style="margin-top:8px">
-                  <label class="form-label">Folder ID (ขั้นสูง)</label>
-                  <div style="display:flex;gap:8px;flex-wrap:wrap">
-                    <input id="s-drive" type="text" class="form-input" readonly placeholder="ระบบจะบันทึกให้อัตโนมัติ">
-                    <button id="btn-drive-manual-edit" class="btn btn-ghost" type="button" style="width:auto;padding:6px 12px;font-size:12px" onclick="App.admin.enableManualDriveFolderEdit()">แก้ไขเอง</button>
-                  </div>
-                </div>
-              </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-                <button id="save-settings-api-btn" class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.saveSettingsTab('api')">บันทึก API</button>
-              </div>
-              <div class="drive-migrate-card" style="margin-top:12px">
-                <div class="text-sm" style="font-weight:700">ย้ายรูปเมนูเดิมเข้า Google Drive</div>
-                <div class="text-xs text-muted" style="line-height:1.5;margin-top:4px">
-                  ระบบจะคัดลอกรูปเมนูเดิมจาก Sheet/URL/Drive เดิม ไปยังโฟลเดอร์ Google Drive ใหม่ แล้วอัปเดตลิงก์รูปในเมนูให้อัตโนมัติ
-                </div>
-                <div class="text-xs text-muted" style="line-height:1.5;margin-top:4px">
-                  ระบบจะคัดลอกไฟล์ใหม่ ไม่ลบรูปเดิม และจะอัปเดตลิงก์รูปในเมนูให้เอง
-                </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-                  <button id="btn-migrate-menu-images" class="btn btn-secondary" style="display:none;width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.migrateMenuImagesToDrive()">ย้ายรูปเมนูเดิมเข้า Drive</button>
-                  <button id="btn-backup-menu-images" class="btn btn-ghost" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.backupMenuBeforeImageMigration()">สำรองข้อมูลเมนูก่อนย้ายรูป</button>
-                  <button id="btn-verify-menu-images" class="btn btn-ghost" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.verifyMigratedMenuImages()">ตรวจสอบรูปเมนูหลังย้าย</button>
-                  <button id="btn-copy-migrate-report" class="btn btn-ghost" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.copyMenuImageMigrationReport()">คัดลอกรายงาน</button>
-                </div>
-                <div id="menu-image-migrate-status" style="display:none;margin-top:10px">
-                  <div class="drive-migrate-progress"><span id="menu-image-migrate-bar"></span></div>
-                  <div id="menu-image-migrate-text" class="text-xs text-muted" style="margin-top:6px"></div>
-                  <div id="menu-image-migrate-summary" class="text-xs text-muted" style="margin-top:4px"></div>
-                  <div id="menu-image-backup-status" class="text-xs text-muted" style="margin-top:4px"></div>
-                  <div id="menu-image-verify-summary" class="text-xs text-muted" style="margin-top:4px"></div>
-                  <details id="menu-image-migrate-failed-wrap" style="display:none;margin-top:8px">
-                    <summary class="text-xs" style="cursor:pointer">ดูรายการที่ย้ายไม่สำเร็จ</summary>
-                    <ul id="menu-image-migrate-failed-list" class="text-xs text-muted" style="margin:6px 0 0 16px"></ul>
-                  </details>
-                </div>
-                <details style="margin-top:10px" class="drive-danger-zone">
-                  <summary class="text-sm" style="cursor:pointer;color:#b91c1c;font-weight:700">ย้อนกลับลิงก์รูปเมนู (Danger Zone)</summary>
-                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-                    <button class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.checkRollbackCandidates()">ตรวจสอบรายการที่ย้อนกลับได้</button>
-                    <button class="btn btn-danger" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.rollbackMenuImagesLatest()">ย้อนกลับรูปเมนูที่ย้ายล่าสุด</button>
-                  </div>
-                  <div id="menu-image-rollback-summary" class="text-xs text-muted" style="margin-top:8px"></div>
-                </details>
+              <span id="api-drive-status" class="text-sm text-muted">ยังไม่ได้ตรวจสอบ</span>
+              <div class="form-group" style="margin-top:10px">
+                <label class="form-label">Folder ID (readonly)</label>
+                <input id="s-drive" type="text" class="form-input" readonly placeholder="ระบบจะบันทึกให้อัตโนมัติ">
               </div>
             </div>
           </div>
@@ -758,18 +741,74 @@
             <div class="card p-4" style="margin-bottom:14px">
               <div class="section-header" style="margin-bottom:10px">
                 <h3 style="font-weight:700;font-size:15px">📝 Activity Logs</h3>
-                <button class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.loadActivityLogs()">รีเฟรช</button>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button id="logs-refresh-btn" data-logs-search-btn="1" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.loadActivityLogs(true)">รีเฟรช</button>
+                  <button id="logs-cleanup-btn" class="btn btn-ghost" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.admin.cleanupLogs()">ล้าง Logs เก่า</button>
+                </div>
               </div>
-              <div class="table-wrap">
+              <div class="grid two" style="gap:8px;margin-bottom:10px">
+                <div class="calendar-range-row">
+                  <input id="logs-date-from" type="text" class="form-input calendar-range-input" placeholder="เริ่มวันที่" readonly onclick="App.admin.openDatePickerPopup('logs','from')">
+                  <button class="btn btn-secondary calendar-range-btn" type="button" onclick="App.admin.openDatePickerPopup('logs','from')">เลือก</button>
+                </div>
+                <div class="calendar-range-row">
+                  <input id="logs-date-to" type="text" class="form-input calendar-range-input" placeholder="สิ้นสุดวันที่" readonly onclick="App.admin.openDatePickerPopup('logs','to')">
+                  <button class="btn btn-secondary calendar-range-btn" type="button" onclick="App.admin.openDatePickerPopup('logs','to')">เลือก</button>
+                </div>
+              </div>
+              <p id="logs-date-preview" class="text-xs text-muted" style="margin:-2px 0 10px">ช่วงวันที่: ทั้งหมด</p>
+              <div class="filter-row" style="margin-bottom:10px">
+                <button class="filter-chip" type="button" onclick="App.admin.quickPickLogsDateRange('today')">วันนี้</button>
+                <button class="filter-chip" type="button" onclick="App.admin.quickPickLogsDateRange('7')">7 วัน</button>
+                <button class="filter-chip" type="button" onclick="App.admin.quickPickLogsDateRange('30')">30 วัน</button>
+                <button class="filter-chip active" type="button" onclick="App.admin.quickPickLogsDateRange('clear')">ทั้งหมด</button>
+              </div>
+              <div class="grid two" style="gap:8px;margin-bottom:10px">
+                <select id="logs-module" class="form-input" onchange="App.admin.loadActivityLogs(true)">
+                  <option value="">ทุกหมวด</option>
+                  <option value="auth">auth</option>
+                  <option value="menu">menu</option>
+                  <option value="orders">orders</option>
+                  <option value="payment">payment</option>
+                  <option value="drive">drive</option>
+                  <option value="notification">notification</option>
+                  <option value="slipok">slipok</option>
+                  <option value="settings">settings</option>
+                </select>
+                <select id="logs-level" class="form-input" onchange="App.admin.loadActivityLogs(true)">
+                  <option value="">ทุกระดับ</option>
+                  <option value="ERROR">ERROR</option>
+                  <option value="WARN">WARN</option>
+                  <option value="INFO">INFO</option>
+                  <option value="SECURITY">SECURITY</option>
+                </select>
+              </div>
+              <div class="grid two" style="gap:8px;margin-bottom:10px">
+                <select id="logs-status" class="form-input" onchange="App.admin.loadActivityLogs(true)">
+                  <option value="">ทุกสถานะ</option>
+                  <option value="success">success</option>
+                  <option value="failed">failed</option>
+                  <option value="error">error</option>
+                </select>
+                <input id="logs-search" type="text" class="form-input" placeholder="ค้นหา module/action/message" oninput="App.admin.onLogsFilterInput()">
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+                <button id="logs-search-btn" data-logs-search-btn="1" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" type="button" onclick="App.admin.loadActivityLogs(true)">ค้นหา</button>
+              </div>
+              <div id="logs-search-status" class="text-xs text-muted" style="min-height:18px;margin:-4px 0 8px"></div>
+              <div id="logs-last-loaded" class="text-xs text-muted" style="min-height:18px;margin:-6px 0 8px"></div>
+              <div class="table-wrap logs-table-wrap">
                 <table>
-                  <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>รายละเอียด</th></tr></thead>
+                  <thead><tr><th>เวลา</th><th>level</th><th>module</th><th>action</th><th>status</th><th>message</th></tr></thead>
                   <tbody id="activity-log-table"></tbody>
                 </table>
+              </div>
+              <div style="display:flex;justify-content:center;margin-top:10px">
+                <button id="logs-load-more-btn" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px;display:none" onclick="App.admin.loadMoreLogs()">โหลดเพิ่ม</button>
               </div>
             </div>
           </div>
 
-          <button id="save-settings-btn" class="btn btn-primary" style="margin-top:8px;display:none" onclick="App.admin.saveSettings()">บันทึกการตั้งค่า</button>
         </div>
       </div>
 
@@ -1289,6 +1328,34 @@
       <div class="admin-modal-footer">
         <button class="btn btn-ghost" style="flex:1" onclick="App.admin.closeDatePickerPopup()">ยกเลิก</button>
         <button class="btn btn-primary" style="flex:2" onclick="App.admin.applyDatePickerPopup()">ใช้งานช่วงวันที่นี้</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIME PICKER POPUP -->
+  <div id="time-picker-popup" class="admin-modal" onclick="if(event.target===this)App.admin.closeTimePickerPopup()">
+    <div class="admin-modal-box time-popup-box" onclick="event.stopPropagation()" style="max-width:420px">
+      <div class="admin-modal-header">
+        <h3 id="tp-title">🕒 เลือกเวลา</h3>
+        <button class="btn-icon" onclick="App.admin.closeTimePickerPopup()">✕</button>
+      </div>
+      <div class="admin-modal-body" style="padding:14px 16px 10px">
+        <div class="time-popup-current">เวลาที่เลือก: <strong id="tp-current">--:--</strong></div>
+        <div class="time-popup-section-title">ชั่วโมง</div>
+        <div id="tp-hour-grid" class="time-popup-grid hour-grid"></div>
+        <div class="time-popup-section-title">นาที</div>
+        <div id="tp-minute-grid" class="time-popup-grid minute-grid"></div>
+        <div class="time-popup-quick">
+          <button class="btn btn-secondary time-quick-btn" type="button" onclick="App.admin.setTimePickerValue(8,0)">08:00</button>
+          <button class="btn btn-secondary time-quick-btn" type="button" onclick="App.admin.setTimePickerValue(12,0)">12:00</button>
+          <button class="btn btn-secondary time-quick-btn" type="button" onclick="App.admin.setTimePickerValue(17,0)">17:00</button>
+          <button class="btn btn-secondary time-quick-btn" type="button" onclick="App.admin.setTimePickerValue(20,0)">20:00</button>
+          <button class="btn btn-ghost time-quick-btn" type="button" onclick="App.admin.clearTimePickerValue()">ล้างเวลา</button>
+        </div>
+      </div>
+      <div class="admin-modal-footer">
+        <button class="btn btn-ghost" style="flex:1" onclick="App.admin.closeTimePickerPopup()">ยกเลิก</button>
+        <button class="btn btn-primary" style="flex:2" onclick="App.admin.applyTimePickerPopup()">ตกลง</button>
       </div>
     </div>
   </div>
