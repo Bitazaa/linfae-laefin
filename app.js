@@ -957,7 +957,7 @@ var App={
       if(!App.state.cart.length){wrap.innerHTML='<p class="text-sm text-muted">ไม่มีรายการ</p>';return;}
       var e=App.u.esc,sub=App.customer.getSubtotal(),disc=App.state.promo.discount||0,total=Math.max(0,sub-disc);
       wrap.innerHTML=App.state.cart.map(function(ci){
-        return'<div class="preview-item"><div><div>'+e(ci.name)+' ×'+ci.qty+'</div>'+(ci.options&&ci.options.length?'<div class="text-xs text-muted">'+ci.options.map(function(c){return e(c.label||c);}).join(', ')+'</div>':'')+'</div><div class="preview-item-price">'+App.u.fmt(ci.price*ci.qty)+'</div></div>';
+        return'<div class="preview-item"><div><div>'+e(ci.name)+' ×'+ci.qty+'</div>'+(ci.options&&ci.options.length?'<div class="text-xs text-muted">'+ci.options.map(function(c){return e(c.label||c);}).join(', ')+'</div>':'')+(ci.comment?'<div class="text-xs text-muted">💬 '+e(ci.comment)+'</div>':'')+'</div><div class="preview-item-price">'+App.u.fmt(ci.price*ci.qty)+'</div></div>';
       }).join('')+(disc>0?'<div class="preview-item" style="color:var(--green)"><div>โปรโมชัน</div><div>-'+App.u.fmt(disc)+'</div></div>':'')
         +'<div class="preview-item" style="font-weight:700;border-top:2px solid var(--border);padding-top:10px;margin-top:4px"><div>รวม</div><div style="color:var(--primary)">'+App.u.fmt(total)+'</div></div>';
     },
@@ -986,7 +986,7 @@ var App={
       });
       var emoji=item.category==='เครื่องดื่ม'?'🥤':item.category==='อาหาร'?'🍛':'🍱';
       var body=document.getElementById('modal-body');if(!body)return;
-      body.innerHTML=(item.image?'<div class="modal-img-wrap"><img src="'+e(item.image)+'" onerror="this.style.display=\'none\'"></div>':'<div style="font-size:64px;text-align:center;padding:24px;background:var(--surface);">'+emoji+'</div>')+optHtml+'<div class="mt-3"><label class="text-sm" style="display:block;margin-bottom:6px">💬 Comment</label><textarea id="modal-item-comment" class="input" rows="2" maxlength="160" placeholder="เช่น หวานน้อย, ไม่ใส่น้ำแข็ง, แยกน้ำเชื่อม" oninput="App.customer.setModalComment(this.value)"></textarea></div>'+'<div class="qty-control mt-3"><button class="qty-btn" onclick="App.customer.changeQty(-1)">−</button><span id="modal-qty" style="font-size:18px;font-weight:700;min-width:28px;text-align:center">1</span><button class="qty-btn" onclick="App.customer.changeQty(1)">+</button><span style="margin-left:auto;font-size:14px;color:var(--text2)">รวม: <strong id="modal-sub">'+App.u.fmt(item.price)+'</strong></span></div>';
+      body.innerHTML=(item.image?'<div class="modal-img-wrap"><img src="'+e(item.image)+'" onerror="this.style.display=\'none\'"></div>':'<div style="font-size:64px;text-align:center;padding:24px;background:var(--surface);">'+emoji+'</div>')+optHtml+'<div class="mt-3 menu-item-comment-wrap"><label class="text-sm" style="display:block;margin-bottom:6px">หมายเหตุเมนูนี้</label><textarea id="modal-item-comment" class="input" rows="3" maxlength="160" placeholder="เช่น หวานน้อย, ไม่ใส่น้ำแข็ง, แยกน้ำ, เพิ่มซอส" oninput="App.customer.setModalComment(this.value)"></textarea></div>'+'<div class="qty-control mt-3"><button class="qty-btn" onclick="App.customer.changeQty(-1)">−</button><span id="modal-qty" style="font-size:18px;font-weight:700;min-width:28px;text-align:center">1</span><button class="qty-btn" onclick="App.customer.changeQty(1)">+</button><span style="margin-left:auto;font-size:14px;color:var(--text2)">รวม: <strong id="modal-sub">'+App.u.fmt(item.price)+'</strong></span></div>';
       var tt=document.getElementById('modal-title'),tp=document.getElementById('modal-price');
       if(tt)tt.textContent=item.name;if(tp)tp.textContent=App.u.fmt(item.price);
       document.getElementById('item-modal').classList.add('active');
@@ -1045,7 +1045,7 @@ var App={
       if(sw)sw.classList.remove('hidden');var e=App.u.esc;
       wrap.innerHTML=App.state.cart.map(function(ci,idx){
         var imgHtml=ci.image?'<img src="'+e(ci.image)+'" onerror="this.style.display=\'none\'">':'🍱';
-        return'<div class="cart-item"><div class="cart-item-img">'+imgHtml+'</div><div class="cart-item-info"><div class="cart-item-name">'+e(ci.name)+'</div>'+(ci.options&&ci.options.length?'<div class="cart-item-opts">'+ci.options.map(function(c){return e(c.label||c);}).join(', ')+'</div>':'')
+        return'<div class="cart-item"><div class="cart-item-img">'+imgHtml+'</div><div class="cart-item-info"><div class="cart-item-name">'+e(ci.name)+'</div>'+(ci.options&&ci.options.length?'<div class="cart-item-opts">'+ci.options.map(function(c){return e(c.label||c);}).join(', ')+'</div>':'')+(ci.comment?'<div class="cart-item-opts">💬 '+e(ci.comment)+'</div>':'')
           +'<div class="cart-item-footer"><div style="display:flex;align-items:center;gap:8px"><button class="qty-btn" style="width:28px;height:28px;font-size:14px" onclick="App.customer.cartQty('+idx+',-1)">−</button><span style="font-weight:600;min-width:20px;text-align:center">'+ci.qty+'</span><button class="qty-btn" style="width:28px;height:28px;font-size:14px" onclick="App.customer.cartQty('+idx+',1)">+</button></div><div style="display:flex;align-items:center;gap:4px"><div class="cart-item-price">'+App.u.fmt(ci.price*ci.qty)+'</div><button class="btn-icon" onclick="App.customer.removeItem('+idx+')" style="color:var(--primary)">🗑</button></div></div></div></div>';
       }).join('');App.customer.renderSummary();
     },
@@ -1085,7 +1085,7 @@ var App={
       if(!App.customer._isScanEnabled()&&!App.customer._isCashEnabled()){App.ui.toast('ร้านยังไม่ได้เปิดใช้งานวิธีชำระเงิน','error');return;}
       var paymentMethod=App.customer._isCashEnabled()?(App.state._paymentMethod||'scan'):'scan';
       if(paymentMethod==='scan'&&!App.customer._isScanEnabled()){App.ui.toast('ร้านยังไม่ได้เปิดใช้งานวิธีชำระเงิน','error');return;}
-      var payload={customer:name,department:dept,note:note,customerNote:customerNote,customer_note:customerNote,items:App.state.cart.map(function(i){return{menuId:i.menuId,qty:i.qty,selectedChoices:(i.options||[]).map(function(c){return (c&&c.label)?c.label:String(c||'');}).concat(i.comment?['💬 '+i.comment]:[])};}),paymentMethod:paymentMethod};
+      var payload={customer:name,department:dept,note:note,customerNote:customerNote,customer_note:customerNote,items:App.state.cart.map(function(i){var itemComment=String(i&&i.comment||'').replace(/[\u0000-\u001f\u007f]/g,'').trim().substring(0,160);return{menuId:i.menuId,qty:i.qty,comment:itemComment,item_comment:itemComment,selectedChoices:(i.options||[]).map(function(c){return (c&&c.label)?c.label:String(c||'');}).concat(itemComment?['💬 '+itemComment]:[])};}),paymentMethod:paymentMethod};
       App.state._paymentPayload={customer:name,department:dept,note:note,customerNote:customerNote,customer_note:customerNote,cart:JSON.parse(JSON.stringify(App.state.cart)),promo:JSON.parse(JSON.stringify(App.state.promo)),paymentMethod:paymentMethod};
       var btn=document.getElementById('to-payment-btn');App.ui.setBtn(btn,true);
       if(paymentMethod==='cash'){
@@ -1431,7 +1431,7 @@ var App={
         }else{
           payRows+='<div class="receipt-row" style="font-weight:700"><span>รวมทั้งหมด</span><span>'+App.u.fmt(payAmount)+'</span></div>';
         }
-        wrap.innerHTML='<div class="receipt-box">'+codBanner+'<div class="receipt-title">🧾 ใบเสร็จ #'+e(App.state.orderId||'')+'</div>'+customerMeta+cart.map(function(i){return'<div class="receipt-row"><span>'+e(i.name)+(i.options&&i.options.length?'<br><span style="font-size:11px;color:var(--text2)">'+i.options.map(function(c){return e(c.label||c);}).join(', ')+'</span>':'')+' ×'+i.qty+'</span><span>'+App.u.fmt(i.price*i.qty)+'</span></div>';}).join('')+'<hr class="receipt-divider">'+((App.state.promo.discount||0)>0?'<div class="receipt-row" style="color:var(--green)"><span>โปรโมชัน</span><span>-'+App.u.fmt(App.state.promo.discount)+'</span></div>':'')+payRows+(qrHtml?'<hr class="receipt-divider">'+qrHtml:'')+'</div>';
+        wrap.innerHTML='<div class="receipt-box">'+codBanner+'<div class="receipt-title">🧾 ใบเสร็จ #'+e(App.state.orderId||'')+'</div>'+customerMeta+cart.map(function(i){return'<div class="receipt-row"><span>'+e(i.name)+(i.options&&i.options.length?'<br><span style="font-size:11px;color:var(--text2)">'+i.options.map(function(c){return e(c.label||c);}).join(', ')+'</span>':'')+(i.comment?'<br><span style="font-size:11px;color:var(--text2)">💬 '+e(i.comment)+'</span>':'')+' ×'+i.qty+'</span><span>'+App.u.fmt(i.price*i.qty)+'</span></div>';}).join('')+'<hr class="receipt-divider">'+((App.state.promo.discount||0)>0?'<div class="receipt-row" style="color:var(--green)"><span>โปรโมชัน</span><span>-'+App.u.fmt(App.state.promo.discount)+'</span></div>':'')+payRows+(qrHtml?'<hr class="receipt-divider">'+qrHtml:'')+'</div>';
       },{maxAgeMs:120000});
     },
     cancelOrder(){
@@ -1470,7 +1470,7 @@ var App={
         return '<div class="history-item"><div class="history-header"><div><div class="history-id">#'+e(h.orderId||'')+'</div><div class="history-date">'+new Date(h.ts).toLocaleString('th-TH')+'</div></div><div class="history-total">'+App.u.fmt(d.total||0)+'</div></div>'
           +'<div class="text-xs" style="display:inline-block;margin:4px 0 6px;padding:3px 9px;border-radius:999px;background:'+stBg+';color:'+stColor+';font-weight:700">'+stLabel+'</div>'
           +(d.customer?'<div class="text-xs text-muted" style="margin-bottom:6px">👤 '+e(d.customer)+' | 🏢 '+e(d.department||'')+'</div>':'')
-          +(cart.length?'<div class="text-sm text-muted">'+cart.map(function(i){return e(i.name)+' ×'+i.qty;}).join(', ')+'</div>':'')
+          +(cart.length?'<div class="text-sm text-muted">'+cart.map(function(i){return e(i.name)+' ×'+i.qty+(i.comment?' (💬 '+e(i.comment)+')':'');}).join(', ')+'</div>':'')
           +'<div class="history-actions"><button class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="App.customer.repeatFromHistory('+idx+')">สั่งซ้ำ</button></div>'
           +'</div>';
       }).join('');
@@ -1492,13 +1492,15 @@ var App={
       };
       var list=src.map(function(i){
         var opts=normalizeOptions(i&&i.options);
-        var optKey=opts.map(function(c){return String(c.label||'');}).sort().join(',');
+        var itemComment=String((i&&i.comment)||'').replace(/[\u0000-\u001f\u007f]/g,'').trim().substring(0,160);
+        var optKey=opts.map(function(c){return String(c.label||'');}).sort().join(',')+'|c:'+itemComment;
         return{
           menuId:String((i&&i.menuId)||''),
           name:String((i&&i.name)||''),
           image:String((i&&i.image)||''),
           price:toNum((i&&i.price)||0),
           options:opts,
+          comment:itemComment,
           qty:Math.max(1,Math.min(99,parseInt((i&&i.qty)||1,10)||1)),
           _optKey:optKey
         };
@@ -6446,7 +6448,9 @@ var App={
             var pr=parseFloat(it.price||0),qty=parseInt(it.qty||1);
             var extras=fmtExtras(it.options);
             var extraHtml=extras.length?'<div class="order-row-extras"><span class="order-extra-label">ตัวเสริม</span><span class="order-extra-values">'+extras.map(e).join(', ')+'</span></div>':'';
-            return'<div class="order-row-item"><span class="order-item-name">'+e(it.name||'?')+'</span> <strong class="order-item-qty">×'+qty+'</strong>'+(pr>0?' <span class="order-item-price">฿'+Math.round(pr*qty)+'</span>':'')+extraHtml+'</div>';
+            var itemComment=String(it&&(it.item_comment||it.comment)||'').trim();
+            var commentHtml=itemComment?'<div class="order-row-extras"><span class="order-extra-label">หมายเหตุ</span><span class="order-extra-values">'+e(itemComment)+'</span></div>':'';
+            return'<div class="order-row-item"><span class="order-item-name">'+e(it.name||'?')+'</span> <strong class="order-item-qty">×'+qty+'</strong>'+(pr>0?' <span class="order-item-price">฿'+Math.round(pr*qty)+'</span>':'')+extraHtml+commentHtml+'</div>';
           }).join('');
         }else if(pendingItems||!o.__itemsFetchDone){
           itemsHtml='<div class="text-xs text-muted" style="padding:2px 0">กำลังโหลดรายการอาหาร...</div>';
@@ -7532,6 +7536,10 @@ var App={
             if(labels.length){
               html+='<div style="font-size:'+fs(11,7)+'px;color:#444;margin-bottom:'+fs(4,1)+'px;padding-left:'+fs(8,3)+'px">• '+labels.join(', ')+'</div>';
             }
+            var lineComment=String(it&&(it.item_comment||it.comment)||'').trim();
+            if(lineComment){
+              html+='<div style="font-size:'+fs(11,7)+'px;color:#444;margin-bottom:'+fs(4,1)+'px;padding-left:'+fs(8,3)+'px">💬 '+lineComment+'</div>';
+            }
           });
         }
         if(showReceipt.total){html+='<div style="border-top:1.2px dashed #666;margin:'+fs(8,3)+'px 0"></div>';html+='<div style="display:flex;justify-content:space-between;font-size:'+fs(16,10)+'px;font-weight:700"><span>รวมทั้งหมด</span><span style="color:#111">฿'+Math.round(parseFloat(o.total||0)).toLocaleString('th-TH')+'</span></div>';}
@@ -7710,3 +7718,5 @@ try{
     },0);
   }
 }catch(_){ }
+
+
