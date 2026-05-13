@@ -2865,24 +2865,58 @@ var App={
       if(action==='pdf')App.admin.downloadPrintingSelectionPdf(tab);
       else App.admin.directPrintSelection(tab);
     },
+    _isIOSDevice:function(){
+      var ua=String((navigator&&navigator.userAgent)||'');
+      var platform=String((navigator&&navigator.platform)||'');
+      var touch=(navigator&&navigator.maxTouchPoints)||0;
+      return /iPhone|iPad|iPod/i.test(ua)||((/Mac/i.test(platform))&&touch>1);
+    },
+    _isMobilePrintContext:function(){
+      var ua=String((navigator&&navigator.userAgent)||'');
+      return /Android|iPhone|iPad|iPod|Mobile/i.test(ua)||window.innerWidth<=900;
+    },
+    _canUseDirectBrowserPrint:function(){
+      if(App.admin._isIOSDevice())return false;
+      if(App.admin._isMobilePrintContext())return false;
+      return true;
+    },
+    _showMobileStickerGuideDialog:function(){
+      var m=document.getElementById('mobile-sticker-guide-modal');
+      if(m)m.classList.add('active');
+    },
+    closeMobileStickerGuideDialog:function(){
+      var m=document.getElementById('mobile-sticker-guide-modal');
+      if(m)m.classList.remove('active');
+    },
+    openMobileStickerPrintFallback:function(){
+      var ids=App.admin._getPrintingSelectedIds('sticker');
+      if(!ids.length){App.ui.toast('กรุณาเลือกออเดอร์ก่อนพิมพ์','warn');return;}
+      App.admin._showMobileStickerGuideDialog();
+    },
+    downloadStickerPdfForSelectedOrders:function(){
+      App.admin.closeMobileStickerGuideDialog();
+      App.admin.downloadPrintingSelectionPdf('sticker',{mobileFallback:true});
+    },
+    tryDirectStickerPrintFromGuide:function(){
+      App.admin.closeMobileStickerGuideDialog();
+      App.admin.printStickerSelectionForCT221B();
+    },
     directPrintSelection:function(type){
       var tab=(type==='sticker')?'sticker':'receipt';
-      if(tab==='sticker'){
-        App.admin.printStickerSelectionForCT221B();
-        return;
-      }
       var ids=App.admin._getPrintingSelectedIds(tab);
       if(!ids.length){App.ui.toast('กรุณาเลือกออเดอร์ก่อนพิมพ์','warn');return;}
+      if(tab==='sticker'){
+        if(App.admin._canUseDirectBrowserPrint())App.admin.printStickerSelectionForCT221B();
+        else App.admin.openMobileStickerPrintFallback();
+        return;
+      }
       App.admin._batchForcedOrderIds=ids;
       App.admin._batchTab=tab;
       App.admin.mountLegacyPrintBlocks(tab);
       App.admin._prepareForcedBatchFilters();
       App.admin.doBatchPrint(false);
     },
-    _isCancelledOrderStatus:function(status){
-      var s=String(status||'').trim().toLowerCase();
-      return s==='cancelled'||s==='canceled'||s==='cancel'||s==='void'||s==='refunded'||s==='timeout';
-    },
+
     _normalizePrintItem:function(item){
       var it=item&&typeof item==='object'?item:{};
       var qty=Math.max(1,parseInt(it.qty||it.quantity||1,10)||1);
@@ -3012,28 +3046,54 @@ var App={
       }
       prepareAndPrint(selected);
     },
-    downloadPrintingSelectionPdf:function(type){
+    downloadPrintingSelectionPdf:function(type,opts){
       var tab=(type==='sticker')?'sticker':'receipt';
+      var options=opts||{};
       var ids=App.admin._getPrintingSelectedIds(tab);
-      if(!ids.length){App.ui.toast('กรุณาเลือกออเดอร์ก่อนโหลด PDF','warn');return;}
+      if(!ids.length){App.ui.toast('กรุณาเลือกออเดอร์ก่อนดาวน์โหลดไฟล์','warn');return;}
       if(App.admin._printingPdfBusy)return;
-      App.admin._beginPdfLock('กำลังสร้างไฟล์ PDF...');
+      App.admin._beginPdfLock('กำลังสร้างไฟล์...');
       var orders=App.admin._getPrintingSelectedOrders(tab);
+      var runExport=function(rows){
+        var src=Array.isArray(rows)?rows:[];
+        if(tab==='sticker'){
+          if(ids.length>0&&!src.length){
+            App.admin._endPdfLock();
+            App.ui.toast('โหลดรายการออเดอร์ไม่สำเร็จ กรุณารีเฟรชแล้วลองใหม่','error');
+            return;
+          }
+          var valid=src.filter(function(o){return !App.admin._isCancelledOrderStatus(o&&o.status);});
+          var labels=App.admin._expandOrdersForSticker(valid,'batch');
+          console.log('[sticker-pdf] ids=%d orders=%d labels=%d',ids.length,valid.length,labels.length);
+          if(!labels.length){App.admin._endPdfLock();App.ui.toast('ไม่พบข้อมูลสำหรับดาวน์โหลดสติ๊กเกอร์','warn');return;}
+          var stamp=(function(){var d=new Date();return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');})();
+          var fname='sticker_orders_'+stamp+'.pdf';
+          App.admin._batchForcedOrderIds=ids;
+          App.admin._batchTab=tab;
+          App.admin.mountLegacyPrintBlocks(tab);
+          App.admin._prepareForcedBatchFilters();
+          App.admin._exportPreviewPdf(labels,tab,'batch',fname,function(){App.admin._endPdfLock();});
+          return;
+        }
+        App.admin._batchForcedOrderIds=ids;
+        App.admin._batchTab=tab;
+        App.admin.mountLegacyPrintBlocks(tab);
+        App.admin._prepareForcedBatchFilters();
+        App.admin._exportPreviewPdf(src,tab,'batch','selected_receipt_preview.pdf',function(){App.admin._endPdfLock();});
+      };
       var needLoad=orders.filter(function(o){return !Array.isArray(o&&o.items);});
       if(needLoad.length){
-        App.admin._ensureOrdersItemsLoaded(needLoad,function(){
-          App.admin._endPdfLock();
-          App.admin.downloadPrintingSelectionPdf(tab);
+        App.admin._ensureOrdersItemsLoaded(orders,function(full){
+          var base=Array.isArray(orders)?orders:[];
+          var loaded=Array.isArray(full)?full:[];
+          var map={};
+          loaded.forEach(function(o){map[String(o&&o.id||'')]=o;});
+          var resolved=base.map(function(o){var id=String(o&&o.id||'');return map[id]||o;});
+          runExport(resolved);
         });
         return;
       }
-      App.admin._batchForcedOrderIds=ids;
-      App.admin._batchTab=tab;
-      App.admin.mountLegacyPrintBlocks(tab);
-      App.admin._prepareForcedBatchFilters();
-      App.admin._exportPreviewPdf(orders,tab,'batch',tab==='sticker'?'selected_sticker_preview.pdf':'selected_receipt_preview.pdf',function(){
-        App.admin._endPdfLock();
-      });
+      runExport(orders);
     },
     openLegacyOrderPrintFromPrinting:function(type){
       var tab=(type==='sticker')?'sticker':'receipt';
@@ -3315,15 +3375,20 @@ var App={
           if(m)m.value=App.state.printing.method;
         });
         var gv=function(id,def){var el=document.getElementById(id);var v=String(el&&el.value||'').trim();return v||def;};
+        var pref=function(bsId,ssId,def){
+          var b=gv(bsId,'');
+          if(b!=='')return b;
+          return gv(ssId,def);
+        };
         var payload={
           print_method:'browser',
           bluetooth_auto_connect:'0',
-          sticker_width_mm:gv('ss-width-mm','50'),
-          sticker_height_mm:gv('ss-height-mm','30'),
-          sticker_margin_mm:gv('ss-margin-mm','2'),
-          sticker_font_scale:gv('ss-font-scale','1'),
-          sticker_template:gv('ss-template-mode','sticker_per_item'),
-          sticker_item_qty_mode:gv('ss-item-qty-mode','repeat_each')
+          sticker_width_mm:pref('bs-width-mm','ss-width-mm','50'),
+          sticker_height_mm:pref('bs-height-mm','ss-height-mm','30'),
+          sticker_margin_mm:pref('bs-margin-mm','ss-margin-mm','2'),
+          sticker_font_scale:pref('bs-font-scale','ss-font-scale','1'),
+          sticker_template:pref('bs-template-mode','ss-template-mode','sticker_per_item'),
+          sticker_item_qty_mode:pref('bs-item-qty-mode','ss-item-qty-mode','repeat_each')
         };
         App.api.call('saveSettings',[payload,App.state.adminToken],function(res){
           if(!res||!res.success)return;
@@ -7226,15 +7291,10 @@ var App={
           isFixed:!!recSpec.isFixed
         };
       }
-      var sticker=(mode==='batch')
-        ?App.admin._resolveStickerSize('bs-size','bs-size-custom','100x70')
-        :App.admin._resolveStickerSize('ss-size','ss-size-custom','100x70');
+      var paperCfg=App.admin._getStickerPaperCfg(mode==='batch'?'batch':'single');
       var cal2=App.admin._getStickerCalibration(mode);
-      var sp2=String(sticker||'100x70').split('x');
-      var w2=parseFloat(sp2[0]||100);
-      var h2=parseFloat(sp2[1]||70);
-      if(!(w2>0))w2=100;
-      if(!(h2>0))h2=70;
+      var w2=parseFloat(paperCfg&&paperCfg.widthMm||50)||50;
+      var h2=parseFloat(paperCfg&&paperCfg.heightMm||30)||30;
       if(orientation==='landscape'){var t2=w2;w2=h2;h2=t2;}
       var outW=Math.round((w2*cal2.scale)*100)/100;
       var outH=Math.round((h2*cal2.scale)*100)/100;
@@ -7242,9 +7302,9 @@ var App={
         tab:tab,
         mode:mode,
         shopName:shopName,
-        previewWidth:String(outW||100)+'mm',
-        pageWidthMm:outW||100,
-        pageHeightMm:outH||70,
+        previewWidth:String(outW||50)+'mm',
+        pageWidthMm:outW||50,
+        pageHeightMm:outH||30,
         isFixed:true
       };
     },
@@ -7983,6 +8043,10 @@ try{
     },0);
   }
 }catch(_){ }
+
+
+
+
 
 
 
