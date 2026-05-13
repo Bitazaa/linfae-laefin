@@ -55,6 +55,18 @@ var App={
     debounce(key,ms){ms=ms||800;if(App.state._actionBusy[key])return true;App.state._actionBusy[key]=true;setTimeout(function(){delete App.state._actionBusy[key];},ms);return false;},
     esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');},
     fmt(n){return '฿'+Math.round(toNum(n)).toLocaleString('th-TH');},
+    formatDateTimeTH(raw){
+      if(!raw)return '-';
+      var dt=(raw instanceof Date)?raw:new Date(raw);
+      if(!dt||isNaN(dt.getTime()))return '-';
+      return dt.toLocaleString('th-TH',{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+    },
+    formatDateTH(raw){
+      if(!raw)return '-';
+      var dt=(raw instanceof Date)?raw:new Date(raw);
+      if(!dt||isNaN(dt.getTime()))return '-';
+      return dt.toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'2-digit'});
+    },
     digitsOnly(v){return String(v==null?'':v).replace(/[^0-9]/g,'');},
     isValidPromptPayId(v){
       var d=App.u.digitsOnly(v);
@@ -273,7 +285,9 @@ var App={
         notification_line_target_id:'',
         notification_telegram_enabled:'0',
         notification_telegram_bot_token_masked:'',
-        notification_telegram_chat_id:''
+        notification_telegram_chat_id:'',
+        notification_include_admin_link:'0',
+        notification_admin_url:''
       }};
       if(fn==='saveNotificationSettings')return{success:true,data:{saved:true}};
       if(fn==='testLineNotification')return{success:true,data:{ok:true,message:'โหมดเดโม: ส่ง LINE สำเร็จ'}};
@@ -294,20 +308,68 @@ var App={
   ui:{
     _popupTimer:null,
     _confirmBusy:false,
-    toast(msg,type){
+    applyGlobalBrand:function(name,logo){
+      var fallbackName=(typeof window!=='undefined'&&window._restaurantName)?String(window._restaurantName):'FoodOrder';
+      var fallbackLogo=(typeof window!=='undefined'&&window._restaurantLogo)?String(window._restaurantLogo):'';
+      var safeName=String(name||fallbackName||'FoodOrder').trim()||'FoodOrder';
+      var safeLogo=String(logo||fallbackLogo||'').trim();
+      var applyLogo=function(el){
+        if(!el)return;
+        if(!safeLogo){el.innerHTML='🍽';return;}
+        el.innerHTML='<img src="'+App.u.esc(safeLogo)+'" alt="logo" onerror="this.parentNode.innerHTML=\'🍽\'">';
+      };
+      try{
+        document.querySelectorAll('.brand-name').forEach(function(el){el.textContent=safeName;});
+      }catch(_){}
+      applyLogo(document.getElementById('topbar-brand-logo'));
+      var adminName=document.getElementById('admin-sidebar-brand-name');
+      if(adminName)adminName.textContent=safeName;
+      applyLogo(document.getElementById('admin-sidebar-logo'));
+      try{document.title=safeName;}catch(_){}
+      window._restaurantName=safeName;
+      window._restaurantLogo=safeLogo;
+      App.state._restaurantLogo=safeLogo;
+      try{
+        localStorage.setItem('fo_brand_cache_v1',JSON.stringify({name:safeName,logo:safeLogo,ts:Date.now()}));
+      }catch(_){}
+    },
+    toast(msg,type,options){
       type=type||'info';
+      options=options||{};
       var ov=document.getElementById('center-popup-overlay');
       var icon=document.getElementById('center-popup-icon');
       var txt=document.getElementById('center-popup-text');
-      if(!ov||!icon||!txt)return;
+      var card=document.getElementById('center-popup-card');
+      if(!ov||!icon||!txt||!card)return;
       ov.classList.toggle('customer-mode',App.ui._isCustomerContext());
       var map={success:{i:'✓',c:'#22c55e'},error:{i:'✕',c:'#ef4444'},warn:{i:'⚠',c:'#f59e0b'},info:{i:'ℹ',c:'#38bdf8'}};
       var m=map[type]||map.info;
       icon.textContent=m.i;icon.style.color=m.c;
-      txt.textContent=String(msg||'');
+      var title=String(options.title||'').trim();
+      txt.innerHTML=(title?('<div class="popup-title">'+App.u.esc(title)+'</div>'):'')+'<div class="popup-message">'+App.u.esc(String(msg||''))+'</div>';
+      var defaults={success:1200,info:1600,warn:4500,error:6500};
+      var sticky=!!options.sticky;
+      var duration=Math.max(1200,parseInt(options.duration,10)||defaults[type]||3500);
+      var showClose=(type==='warn'||type==='error'||options.closeButton===true);
+      var closeBtn=document.getElementById('center-popup-close');
+      if(!closeBtn){
+        closeBtn=document.createElement('button');
+        closeBtn.id='center-popup-close';
+        closeBtn.className='popup-close-btn';
+        closeBtn.type='button';
+        closeBtn.textContent='ปิด';
+        closeBtn.onclick=function(){
+          ov.classList.remove('active');
+          ov.classList.remove('customer-mode');
+        };
+        card.appendChild(closeBtn);
+      }
+      closeBtn.style.display=showClose?'inline-flex':'none';
       ov.classList.add('active');
       if(App.ui._popupTimer)clearTimeout(App.ui._popupTimer);
-      App.ui._popupTimer=setTimeout(function(){ov.classList.remove('active');ov.classList.remove('customer-mode');},1700);
+      if(!sticky){
+        App.ui._popupTimer=setTimeout(function(){ov.classList.remove('active');ov.classList.remove('customer-mode');},duration);
+      }
     },
     confirm:function(msg,cb,opts){
       opts=opts||{};
@@ -569,14 +631,7 @@ var App={
       App.customer.applyPaymentMethodUI();
     },
     applyBrand:function(name,logo){
-      var safeName=String(name||window._restaurantName||'FoodOrder');
-      var safeLogo=String(logo||'').trim();
-      App.state._restaurantLogo=safeLogo;
-      document.querySelectorAll('.brand-name').forEach(function(el){el.textContent=safeName;});
-      var w=document.getElementById('topbar-brand-logo');
-      if(!w)return;
-      if(!safeLogo){w.innerHTML='🍽';return;}
-      w.innerHTML='<img src="'+App.u.esc(safeLogo)+'" alt="logo" onerror="this.parentNode.innerHTML=\'🍽\'">';
+      App.ui.applyGlobalBrand(name,logo);
     },
     _isOpenBySettings:function(s){
       if(!s)return true;
@@ -902,7 +957,7 @@ var App={
       if(!App.state.cart.length){wrap.innerHTML='<p class="text-sm text-muted">ไม่มีรายการ</p>';return;}
       var e=App.u.esc,sub=App.customer.getSubtotal(),disc=App.state.promo.discount||0,total=Math.max(0,sub-disc);
       wrap.innerHTML=App.state.cart.map(function(ci){
-        return'<div class="preview-item"><div><div>'+e(ci.name)+' ×'+ci.qty+'</div>'+(ci.options&&ci.options.length?'<div class="text-xs text-muted">'+ci.options.map(function(c){return e(c.label||c);}).join(', ')+'</div>':'')+(ci.comment?'<div class="text-xs text-muted">💬 '+e(ci.comment)+'</div>':'')+'</div><div class="preview-item-price">'+App.u.fmt(ci.price*ci.qty)+'</div></div>';
+        return'<div class="preview-item"><div><div>'+e(ci.name)+' ×'+ci.qty+'</div>'+(ci.options&&ci.options.length?'<div class="text-xs text-muted">'+ci.options.map(function(c){return e(c.label||c);}).join(', ')+'</div>':'')+'</div><div class="preview-item-price">'+App.u.fmt(ci.price*ci.qty)+'</div></div>';
       }).join('')+(disc>0?'<div class="preview-item" style="color:var(--green)"><div>โปรโมชัน</div><div>-'+App.u.fmt(disc)+'</div></div>':'')
         +'<div class="preview-item" style="font-weight:700;border-top:2px solid var(--border);padding-top:10px;margin-top:4px"><div>รวม</div><div style="color:var(--primary)">'+App.u.fmt(total)+'</div></div>';
     },
@@ -911,7 +966,7 @@ var App={
       var item=App.state.menu.find(function(m){return String(m.id)===String(menuId);});
       if(!item){App.ui.toast('ไม่พบเมนู','error');return;}
       if(App.customer._isMenuSoldOut(item)){App.ui.toast('เมนูนี้หมดแล้ว','warn');return;}
-      App.state.selectedMenu={item:item,qty:1,selectedChoices:{},comment:''};
+      App.state.selectedMenu={item:item,qty:1,selectedChoices:{}};
       var opts=App.state.options.filter(function(o){
         var mid=String(o&&o.menu_id||'');
         return mid===String(menuId)||mid==='*';
@@ -931,10 +986,7 @@ var App={
       });
       var emoji=item.category==='เครื่องดื่ม'?'🥤':item.category==='อาหาร'?'🍛':'🍱';
       var body=document.getElementById('modal-body');if(!body)return;
-      body.innerHTML=(item.image?'<div class="modal-img-wrap"><img src="'+e(item.image)+'" onerror="this.style.display=\'none\'"></div>':'<div style="font-size:64px;text-align:center;padding:24px;background:var(--surface);">'+emoji+'</div>')
-        +optHtml
-        +'<div class="mt-3"><label class="text-sm" style="display:block;margin-bottom:6px">💬 Comment</label><textarea id="modal-item-comment" class="input" rows="2" maxlength="160" placeholder="เช่น หวานน้อย, ไม่ใส่น้ำแข็ง, แยกน้ำเชื่อม" oninput="App.customer.setModalComment(this.value)"></textarea></div>'
-        +'<div class="qty-control mt-3"><button class="qty-btn" onclick="App.customer.changeQty(-1)">−</button><span id="modal-qty" style="font-size:18px;font-weight:700;min-width:28px;text-align:center">1</span><button class="qty-btn" onclick="App.customer.changeQty(1)">+</button><span style="margin-left:auto;font-size:14px;color:var(--text2)">รวม: <strong id="modal-sub">'+App.u.fmt(item.price)+'</strong></span></div>';
+      body.innerHTML=(item.image?'<div class="modal-img-wrap"><img src="'+e(item.image)+'" onerror="this.style.display=\'none\'"></div>':'<div style="font-size:64px;text-align:center;padding:24px;background:var(--surface);">'+emoji+'</div>')+optHtml+'<div class="qty-control mt-3"><button class="qty-btn" onclick="App.customer.changeQty(-1)">−</button><span id="modal-qty" style="font-size:18px;font-weight:700;min-width:28px;text-align:center">1</span><button class="qty-btn" onclick="App.customer.changeQty(1)">+</button><span style="margin-left:auto;font-size:14px;color:var(--text2)">รวม: <strong id="modal-sub">'+App.u.fmt(item.price)+'</strong></span></div>';
       var tt=document.getElementById('modal-title'),tp=document.getElementById('modal-price');
       if(tt)tt.textContent=item.name;if(tp)tp.textContent=App.u.fmt(item.price);
       document.getElementById('item-modal').classList.add('active');
@@ -949,7 +1001,6 @@ var App={
     },
     changeQty(d){if(!App.state.selectedMenu)return;App.state.selectedMenu.qty=Math.max(1,Math.min(99,App.state.selectedMenu.qty+d));var el=document.getElementById('modal-qty');if(el)el.textContent=App.state.selectedMenu.qty;App.customer.updateModalSub();},
     updateModalSub(){var s=App.state.selectedMenu;if(!s)return;var p=toNum(s.item.price);Object.values(s.selectedChoices).forEach(function(a){a.forEach(function(c){p+=c.price;});});var el=document.getElementById('modal-sub');if(el)el.textContent=App.u.fmt(p*s.qty);},
-    setModalComment:function(v){if(!App.state.selectedMenu)return;App.state.selectedMenu.comment=String(v||'').replace(/[\u0000-\u001f\u007f]/g,'').trim().substring(0,160);},
     addToCart(){
       if(App.state._shopOpenNow===false){App.ui.toast('ร้านปิดอยู่ ไม่สามารถเพิ่มรายการได้','warn');return;}
       if(App.u.debounce('addcart',600))return;if(!App.state.selectedMenu)return;
@@ -968,11 +1019,10 @@ var App={
       var price=toNum(s.item.price),flatChoices=[];
       Object.values(s.selectedChoices).forEach(function(a){a.forEach(function(c){price+=c.price;flatChoices.push(c);});});
       price=Math.round(price*100)/100;
-      var itemComment=String(s.comment||'').trim();
-      var optKey=flatChoices.map(function(c){return c.label;}).sort().join(',')+'|c:'+itemComment;
+      var optKey=flatChoices.map(function(c){return c.label;}).sort().join(',');
       var xi=App.state.cart.findIndex(function(ci){return String(ci.menuId)===String(s.item.id)&&ci._optKey===optKey;});
       if(xi>-1)App.state.cart[xi].qty=Math.min(99,App.state.cart[xi].qty+s.qty);
-      else App.state.cart.push({menuId:s.item.id,name:s.item.name,image:s.item.image||'',price:price,options:flatChoices,comment:itemComment,qty:s.qty,_optKey:optKey});
+      else App.state.cart.push({menuId:s.item.id,name:s.item.name,image:s.item.image||'',price:price,options:flatChoices,qty:s.qty,_optKey:optKey});
       App.customer.calcPromo();App.customer.updateBadge();App.customer.saveCartLocal();App.customer.closeModal();
       App.ui.toast(s.item.name+' เพิ่มแล้ว','success');
     },
@@ -993,7 +1043,7 @@ var App={
       if(sw)sw.classList.remove('hidden');var e=App.u.esc;
       wrap.innerHTML=App.state.cart.map(function(ci,idx){
         var imgHtml=ci.image?'<img src="'+e(ci.image)+'" onerror="this.style.display=\'none\'">':'🍱';
-        return'<div class="cart-item"><div class="cart-item-img">'+imgHtml+'</div><div class="cart-item-info"><div class="cart-item-name">'+e(ci.name)+'</div>'+(ci.options&&ci.options.length?'<div class="cart-item-opts">'+ci.options.map(function(c){return e(c.label||c);}).join(', ')+'</div>':'')+(ci.comment?'<div class="cart-item-opts">💬 '+e(ci.comment)+'</div>':'')
+        return'<div class="cart-item"><div class="cart-item-img">'+imgHtml+'</div><div class="cart-item-info"><div class="cart-item-name">'+e(ci.name)+'</div>'+(ci.options&&ci.options.length?'<div class="cart-item-opts">'+ci.options.map(function(c){return e(c.label||c);}).join(', ')+'</div>':'')
           +'<div class="cart-item-footer"><div style="display:flex;align-items:center;gap:8px"><button class="qty-btn" style="width:28px;height:28px;font-size:14px" onclick="App.customer.cartQty('+idx+',-1)">−</button><span style="font-weight:600;min-width:20px;text-align:center">'+ci.qty+'</span><button class="qty-btn" style="width:28px;height:28px;font-size:14px" onclick="App.customer.cartQty('+idx+',1)">+</button></div><div style="display:flex;align-items:center;gap:4px"><div class="cart-item-price">'+App.u.fmt(ci.price*ci.qty)+'</div><button class="btn-icon" onclick="App.customer.removeItem('+idx+')" style="color:var(--primary)">🗑</button></div></div></div></div>';
       }).join('');App.customer.renderSummary();
     },
@@ -1008,11 +1058,23 @@ var App={
     },
     toCart(){if(App.state._shopOpenNow===false){App.ui.toast('ร้านปิดอยู่','warn');return;}if(!App.state.cart.length){App.ui.toast('ตะกร้าว่าง','error');return;}App.ui.nav('cart');},
     toInfo(){if(App.state._shopOpenNow===false){App.ui.toast('ร้านปิดอยู่','warn');return;}if(!App.state.cart.length){App.ui.toast('ตะกร้าว่าง','error');return;}App.ui.nav('info');},
+    _cleanCustomerText:function(value,maxLen){
+      var m=Math.max(1,parseInt(maxLen||300,10)||300);
+      if(value==null)return '';
+      if(typeof value==='object')return '';
+      var s=String(value||'').trim();
+      if(!s)return '';
+      if(/^error$/i.test(s))return '';
+      if(s==='[object Object]')return '';
+      if(s.length>m)s=s.slice(0,m);
+      return s;
+    },
     toPayment(){
       if(App.state._shopOpenNow===false){App.ui.toast('ร้านปิดอยู่ ไม่สามารถสั่งอาหารได้','warn');return;}
       if(App.u.debounce('checkout',4000))return;
       var nameEl=document.getElementById('cust-name'),deptEl=document.getElementById('dept-select'),noteEl=document.getElementById('cust-note'),customerNoteEl=document.getElementById('cust-customer-note');
-      var name=nameEl?nameEl.value.trim():'',dept=deptEl?deptEl.value:'',note=noteEl?noteEl.value.trim():'',customerNote=customerNoteEl?customerNoteEl.value.trim():'';
+      var name=nameEl?nameEl.value.trim():'',dept=deptEl?deptEl.value:'',noteRaw=noteEl?noteEl.value:'',customerNoteRaw=customerNoteEl?customerNoteEl.value:'';
+      var note=App.customer._cleanCustomerText(noteRaw,300),customerNote=App.customer._cleanCustomerText(customerNoteRaw,300);
       var isVillage=String(App.state._deliveryCategoryType||'village')==='village';
       if(isVillage)dept='';
       if(!name){App.ui.toast('กรุณากรอกชื่อ','error');if(nameEl)nameEl.focus();return;}
@@ -1021,8 +1083,8 @@ var App={
       if(!App.customer._isScanEnabled()&&!App.customer._isCashEnabled()){App.ui.toast('ร้านยังไม่ได้เปิดใช้งานวิธีชำระเงิน','error');return;}
       var paymentMethod=App.customer._isCashEnabled()?(App.state._paymentMethod||'scan'):'scan';
       if(paymentMethod==='scan'&&!App.customer._isScanEnabled()){App.ui.toast('ร้านยังไม่ได้เปิดใช้งานวิธีชำระเงิน','error');return;}
-      var payload={customer:name,department:dept,note:note,customerNote:customerNote,items:App.state.cart.map(function(i){return{menuId:i.menuId,qty:i.qty,selectedChoices:(i.options||[]).map(function(c){return (c&&c.label)?c.label:String(c||'');}).concat(i.comment?['💬 '+i.comment]:[])};}),paymentMethod:paymentMethod};
-      App.state._paymentPayload={customer:name,department:dept,note:note,customerNote:customerNote,cart:JSON.parse(JSON.stringify(App.state.cart)),promo:JSON.parse(JSON.stringify(App.state.promo)),paymentMethod:paymentMethod};
+      var payload={customer:name,department:dept,note:note,customerNote:customerNote,customer_note:customerNote,items:App.state.cart.map(function(i){return{menuId:i.menuId,qty:i.qty,selectedChoices:(i.options||[]).map(function(c){return (c&&c.label)?c.label:String(c||'');})};}),paymentMethod:paymentMethod};
+      App.state._paymentPayload={customer:name,department:dept,note:note,customerNote:customerNote,customer_note:customerNote,cart:JSON.parse(JSON.stringify(App.state.cart)),promo:JSON.parse(JSON.stringify(App.state.promo)),paymentMethod:paymentMethod};
       var btn=document.getElementById('to-payment-btn');App.ui.setBtn(btn,true);
       if(paymentMethod==='cash'){
         App.api.call('createCashOrder',[payload],function(res){
@@ -1538,6 +1600,109 @@ var App={
       el.addEventListener('paste',function(){setTimeout(sync,0);});
       el._driveNormalizeBound=true;
     },
+    refreshDriveStatus:function(mode,meta){
+      var statusEl=document.getElementById('api-drive-folder-status');
+      var metaEl=document.getElementById('api-drive-folder-meta');
+      var folderEl=document.getElementById('s-drive');
+      var folderId=folderEl?App.admin._normalizeGoogleDriveFolderInput(folderEl):'';
+      var state=String(mode||'idle');
+      var map={
+        ready:{txt:'พร้อมใช้งาน',cls:'is-ready'},
+        need_auth:{txt:'ต้อง authorize Drive',cls:'is-warn'},
+        error:{txt:'เกิดข้อผิดพลาด',cls:'is-error'},
+        checking:{txt:'กำลังตรวจสอบ...',cls:'is-info'},
+        idle:{txt:folderId?'ยังไม่ได้ตรวจสอบ':'ยังไม่ได้ตั้งค่า',cls:'is-idle'}
+      };
+      var m=map[state]||map.idle;
+      if(statusEl){
+        statusEl.textContent=m.txt;
+        statusEl.className='drive-status-text '+m.cls;
+      }
+      if(metaEl){
+        var extra='';
+        if(meta&&meta.folderName)extra+='โฟลเดอร์: '+String(meta.folderName);
+        if(meta&&meta.folderId)extra+=(extra?'\n':'')+'Folder ID: '+String(meta.folderId);
+        if(meta&&meta.message)extra+=(extra?'\n':'')+String(meta.message);
+        if(!extra&&folderId)extra='Folder ID: '+folderId;
+        metaEl.textContent=extra;
+      }
+      var copyBtn=document.getElementById('btn-copy-drive-id');
+      if(copyBtn)copyBtn.disabled=!folderId;
+    },
+    toggleDriveAdvanced:function(force){
+      var panel=document.getElementById('drive-advanced-panel');
+      if(!panel)return;
+      var willOpen=(typeof force==='boolean')?force:!panel.classList.contains('open');
+      panel.classList.toggle('open',willOpen);
+    },
+    toggleDriveAdvancedSettings:function(){
+      App.admin.toggleDriveAdvanced();
+    },
+    enableManualDriveFolderEdit:function(){
+      var el=document.getElementById('s-drive');
+      if(!el)return;
+      el.readOnly=false;
+      el.focus();
+      App.ui.toast('เปิดโหมดแก้ไขเองแล้ว อย่าลืมใช้ Folder ID ที่ถูกต้อง','warn',{duration:6500,closeButton:true});
+    },
+    copyDriveFolderId:function(){
+      var el=document.getElementById('s-drive');
+      var folderId=el?App.admin._normalizeGoogleDriveFolderInput(el):'';
+      if(!folderId){
+        App.ui.toast('ยังไม่มี Folder ID กรุณากดสร้างโฟลเดอร์อัตโนมัติก่อน','warn',{duration:6500,closeButton:true});
+        return;
+      }
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(folderId).then(function(){
+          App.ui.toast('คัดลอก Folder ID แล้ว','success');
+        }).catch(function(){
+          App.ui.toast('คัดลอกไม่สำเร็จ กรุณาคัดลอกเอง','warn',{duration:6500,closeButton:true});
+        });
+        return;
+      }
+      App.ui.toast('คัดลอกไม่สำเร็จ กรุณาคัดลอกเอง','warn',{duration:6500,closeButton:true});
+    },
+    openDriveFolder:function(){
+      var el=document.getElementById('s-drive');
+      var folderId=el?App.admin._normalizeGoogleDriveFolderInput(el):'';
+      if(!folderId){
+        App.ui.toast('ยังไม่มี Folder ID กรุณากดสร้างโฟลเดอร์อัตโนมัติก่อน','warn',{duration:6500,closeButton:true});
+        return;
+      }
+      var url='https://drive.google.com/drive/folders/'+encodeURIComponent(folderId);
+      window.open(url,'_blank','noopener');
+    },
+    createMenuImageFolder:function(){
+      if(!App.admin.ensureCanManageUsersApi())return;
+      var nameEl=document.getElementById('s-drive-folder-name');
+      var folderName=String((nameEl&&nameEl.value)||'').trim()||'FoodFlow/Menu Images';
+      if(nameEl)nameEl.value=folderName;
+      var btn=document.getElementById('btn-create-drive-folder');
+      App.admin.refreshDriveStatus('checking',{message:'กำลังสร้าง/เชื่อมต่อโฟลเดอร์...'});
+      if(btn)App.ui.setBtn(btn,true,'⏳ กำลังดำเนินการ...');
+      App.api.call('createMenuImageFolder',[folderName,App.state.adminToken],function(res){
+        if(btn)App.ui.setBtn(btn,false,'สร้าง/เชื่อมต่อโฟลเดอร์อัตโนมัติ');
+        if(App.admin._auth(res))return;
+        if(!res||!res.success){
+          var em=String((res&&res.message)||'สร้างโฟลเดอร์ไม่สำเร็จ');
+          var needAuth=/auth|permission|สิทธิ์|authorize/i.test(em);
+          App.admin.refreshDriveStatus(needAuth?'need_auth':'error',{message:em});
+          App.ui.toast(em,'error',{duration:9000,closeButton:true});
+          return;
+        }
+        var d=res.data||{};
+        var driveEl=document.getElementById('s-drive');
+        if(driveEl){
+          driveEl.value=String(d.folderId||'');
+          driveEl.readOnly=true;
+        }
+        var sm=String((d&&d.message)||res.message||'สร้าง/เชื่อมต่อโฟลเดอร์สำเร็จ');
+        App.admin.refreshDriveStatus('ready',{folderId:String(d.folderId||''),folderName:String(d.folderName||''),message:sm});
+        App.admin._invalidateCache(['settings','menu']);
+        App.admin.loadSettings(true);
+        App.ui.toast(sm,'success',{duration:3500});
+      },{silent:true});
+    },
     _completeLogin:function(data,fallbackUser){
       var payload=data||{};
       App.state.adminToken=String(payload.token||'');
@@ -1604,6 +1769,7 @@ var App={
       App.api.silent('getSettings',[],function(res){
         if(res&&res.success&&res.data){
           App.state._settingsRaw=res.data||{};
+          App.ui.applyGlobalBrand(res.data.restaurant_name,res.data.restaurant_logo);
           App.state._deliveryCategoryType=App.admin._normalizeDeliveryType(res.data.delivery_category_type||'village');
           App.state._deliveryNoteMode=(App.state._deliveryCategoryType==='village'?'address':'note');
           var typeSel=document.getElementById('s-delivery-type-select');
@@ -1617,17 +1783,7 @@ var App={
       App.ui.adminNav('orders');
     },
     applyAdminBrand:function(name,logo){
-      var brandName=String(name||window._restaurantName||'FoodOrder');
-      var brandLogo=String(logo||'').trim();
-      var nameEl=document.getElementById('admin-sidebar-brand-name');
-      var logoEl=document.getElementById('admin-sidebar-logo');
-      if(nameEl)nameEl.textContent=brandName;
-      if(logoEl){
-        if(!brandLogo)logoEl.innerHTML='🍽';
-        else logoEl.innerHTML='<img src="'+App.u.esc(brandLogo)+'" alt="logo" onerror="this.parentNode.innerHTML=\'🍽\'">';
-      }
-      window._restaurantName=brandName;
-      window._restaurantLogo=brandLogo;
+      App.ui.applyGlobalBrand(name,logo);
     },
     login(){
       if(App.u.debounce('login',2500))return;
@@ -1685,7 +1841,12 @@ var App={
           App.admin.loadUsers();
         }
       }
-      if(tabId==='stab-logs')App.admin.loadActivityLogs();
+      if(tabId==='stab-drive'){
+        App.admin.refreshDriveStatus();
+      }
+      if(tabId==='stab-logs'){
+        App.admin.loadActivityLogs(true);
+      }
     },
     _toggleCustomPaperField:function(selectId,inputWrapId){
       var selectEl=document.getElementById(selectId),wrap=document.getElementById(inputWrapId);
@@ -2287,6 +2448,37 @@ var App={
       var m=document.getElementById('test-orders-modal');
       if(m)m.classList.remove('active');
     },
+    openAdminModal:function(id){
+      var m=document.getElementById(String(id||''));
+      if(!m)return;
+      m.classList.add('active');
+      document.body.classList.add('modal-open');
+    },
+    closeAdminModal:function(id){
+      var modalId=String(id||'').trim();
+      if(!modalId){
+        console.warn('[closeAdminModal] missing id');
+        return;
+      }
+      var m=document.getElementById(modalId);
+      if(!m){
+        console.warn('[closeAdminModal] modal not found:',modalId);
+        return;
+      }
+      m.classList.remove('active');
+      if(modalId==='crop-modal'){
+        App.admin.closeCropModal();
+      }
+      var hasActive=document.querySelector('.admin-modal.active');
+      if(!hasActive)document.body.classList.remove('modal-open');
+      var crop=document.getElementById('crop-modal');
+      if(crop&&crop.style.display==='flex'&&!crop.classList.contains('active')){
+        App.admin.closeCropModal();
+      }
+    },
+    closeCropModal:function(){
+      App.admin.closeCrop();
+    },
     onTestModeChanged:function(){
       var modeEl=document.getElementById('to-mode');
       var cnt=document.getElementById('to-count');
@@ -2435,7 +2627,7 @@ var App={
       var btn=document.querySelector('.admin-mode-toggle');
       if(btn)btn.textContent=App.state._adminLight?'🌙 Dark':'☀️ Light';
     },
-    loadPage(page){var map={menu:App.admin.loadMenu,topics:App.admin.loadTopics,promotions:App.admin.loadPromos,printing:App.admin.loadPrinting,notifications:App.admin.loadNotifications,settings:App.admin.loadSettings,orders:App.admin.loadOrders};if(map[page])map[page]();},
+    loadPage(page){var map={menu:App.admin.loadMenu,topics:App.admin.loadTopics,promotions:App.admin.loadPromos,printing:App.admin.loadPrinting,notifications:App.admin.loadNotifications,settings:App.admin.loadSettings,orders:App.admin.loadOrders,logs:function(){App.admin.loadActivityLogs(true);}};if(map[page])map[page]();},
     loadPrinting:function(){
       App.admin._printingBusy=false;
       App.admin.printing.init();
@@ -3593,7 +3785,7 @@ var App={
       }else{
         App.admin.renderMenuTopicsSelector(item?item.id:null, item?item.topic_ids:null);
       }
-      document.getElementById('menu-modal').classList.add('active');
+      App.admin.openAdminModal('menu-modal');
     },
 
     // ── IMAGE / CROP ────────────────────────────────────────────
@@ -3646,6 +3838,7 @@ var App={
       var src=App.state._cropSrcUrl;if(!src)return;
       var modal=document.getElementById('crop-modal');if(!modal)return;
       modal.style.display='flex';
+      document.body.classList.add('modal-open');
       var c=App.admin._crop;c.src=src;c.scale=1;c.x=0;c.y=0;
       // reset zoom slider
       var zs=document.getElementById('crop-zoom');if(zs)zs.value=100;
@@ -3667,6 +3860,8 @@ var App={
     closeCrop:function(){
       var modal=document.getElementById('crop-modal');if(modal)modal.style.display='none';
       App.admin._cropUnbindEvents();
+      var hasActive=document.querySelector('.admin-modal.active');
+      if(!hasActive)document.body.classList.remove('modal-open');
     },
     _cropDraw:function(){
       var c=App.admin._crop;
@@ -3802,29 +3997,19 @@ var App={
           var data={id:id,name:name,price:price,stock:(String(stockRaw||'').trim()===''?'':parseInt(stockRaw,10)),category:document.getElementById('mf-category').value,image:finalUrl,status:document.getElementById('mf-status').value,topic_ids:JSON.stringify(selectedTopics)};
           App.api.call('adminCRUDMenu',[id?'update':'insert',data,App.state.adminToken],function(res){
             if(App.admin._auth(res))return;
+            if(!res||!res.success){
+              if(String(res&&res.code||'')==='DRIVE_FOLDER_NOT_CONFIGURED'){
+                App.admin._invalidateCache('settings');
+                App.admin.loadSettings(true);
+                res=res||{};
+                res.message='ยังไม่ได้บันทึกโฟลเดอร์ Google Drive กรุณาไปที่ ตั้งค่า > Google Drive แล้วกดสร้าง/เชื่อมต่อโฟลเดอร์อัตโนมัติ';
+              }
+            }
             done(res);
           });
         };
-        if(b64&&b64.startsWith('data:image')){
-          App.api.silent('getSettings',[],function(cfgRes){
-            var drv=cfgRes&&cfgRes.success&&cfgRes.data?String(cfgRes.data.drive_folder_id||'').trim():'';
-            if(!drv){
-              if(String(b64).length>49000){
-                done({success:false,message:'รูปใหญ่เกินไป กรุณาตั้งค่า Google Drive Folder ID ก่อนอัปโหลดรูป'});
-                return;
-              }
-              doSave(b64);
-              return;
-            }
-            App.ui.toast('⏳ กำลังอัพโหลดรูป...','info');
-            var mimeType=b64.split(';')[0].split(':')[1]||'image/jpeg';
-            var rawB64=b64.split(',')[1]||'';
-            App.api.call('uploadImageToDrive',[rawB64,'menu_'+Date.now()+'.jpg',mimeType,App.state.adminToken],function(res){
-              if(res&&res.success&&res.data&&res.data.url){doSave(res.data.url);}
-              else{done(res||{success:false,message:'อัพโหลดรูปไม่ได้'});}
-            },{key:'imgupload'});
-          });
-        }else{doSave(imgUrl);}
+        if(b64&&b64.startsWith('data:image')){doSave(b64);}
+        else{doSave(imgUrl);}
       });
     },
     renderMenuTopicsSelector(menuId,topicIdsJson){
@@ -3923,7 +4108,7 @@ var App={
         if(typeof c==='string')return{label:c,price:0};
         return{label:String(c.label||c.name||c),price:toNum(c.price||0)};
       });
-      App.admin.renderTopicChoices();document.getElementById('tf-choice-input').value='';document.getElementById('topic-modal').classList.add('active');
+      App.admin.renderTopicChoices();document.getElementById('tf-choice-input').value='';App.admin.openAdminModal('topic-modal');
     },
     renderTopicChoices(){var list=document.getElementById('tf-choices-list');if(!list)return;var e=App.u.esc;list.innerHTML=App.state._topicChoices.map(function(c,i){var label=typeof c==='string'?c:c.label;var price=typeof c==='object'?toNum(c.price||0):0;return'<span class="choice-tag">'+e(label)+(price>0?' <small style="color:var(--primary)">+'+price+'฿</small>':'')+'<span class="remove-choice" onclick="App.admin.removeTopicChoice('+i+')" title="ลบ">×</span></span>';}).join('');},
     addTopicChoice(){var inp=document.getElementById('tf-choice-input'),priceInp=document.getElementById('tf-choice-price');if(!inp)return;var val=inp.value.trim();var price=toNum(priceInp?priceInp.value:0);if(!val){App.ui.toast('กรุณากรอกชื่อตัวเลือก','error');return;}var exists=App.state._topicChoices.some(function(c){return(typeof c==='string'?c:c.label)===val;});if(exists){App.ui.toast('มีตัวเลือกนี้แล้ว','warn');return;}App.state._topicChoices.push({label:val,price:price});inp.value='';if(priceInp)priceInp.value='';App.admin.renderTopicChoices();},
@@ -4114,8 +4299,9 @@ var App={
         var cashTog=document.getElementById('s-cash-enabled');if(cashTog)cashTog.checked=App.state._cashPaymentEnabled;
         var bankTog=document.getElementById('s-bank-enabled');if(bankTog)bankTog.checked=App.state._bankPaymentEnabled;
         setVal('s-slipok',s.slipok_api_key);setVal('s-branch',s.slipok_branch_id);setVal('s-drive',App.admin._extractGoogleDriveResourceId(s.drive_folder_id));
-        App.customer.applyBrand(s.restaurant_name,s.restaurant_logo);
-        App.admin.applyAdminBrand(s.restaurant_name,s.restaurant_logo);
+        setVal('s-drive-folder-name',s.menu_image_folder_name||'FoodFlow/Menu Images');
+        App.admin.refreshDriveStatus(App.admin._extractGoogleDriveResourceId(s.drive_folder_id)?'ready':'idle',{folderId:App.admin._extractGoogleDriveResourceId(s.drive_folder_id)});
+        App.ui.applyGlobalBrand(s.restaurant_name,s.restaurant_logo);
         App.state._storeLogoB64=null;
         App.state._storeLogoSrcUrl=String(s.restaurant_logo||'');
         App.admin.switchStoreLogoTab('url');
@@ -4127,8 +4313,31 @@ var App={
         var tog=document.getElementById('shop-open-toggle');if(tog)tog.checked=isOpen;
         App.admin.renderShopStatus(isOpen);
         var range={};try{range=JSON.parse(s.shop_open_range||'{}');}catch(_){range={};}
-        setVal('s-open-start',App.admin._toDateTimeLocal(range.start||''));
-        setVal('s-open-end',App.admin._toDateTimeLocal(range.end||''));
+        var startLocal=App.admin._toDateTimeLocal(range.start||'');
+        var endLocal=App.admin._toDateTimeLocal(range.end||'');
+        setVal('s-open-start',startLocal);
+        setVal('s-open-end',endLocal);
+        var splitDateTime=function(v){
+          var s=String(v||'').trim();
+          if(!s)return {date:'',time:''};
+          var p=s.split('T');
+          return {date:p[0]||'',time:(p[1]||'').slice(0,5)};
+        };
+        var sdt=splitDateTime(startLocal);
+        var edt=splitDateTime(endLocal);
+        var sd=document.getElementById('s-open-start-date');
+        var st=document.getElementById('s-open-start-time');
+        var std=document.getElementById('s-open-start-time-display');
+        var ed=document.getElementById('s-open-end-date');
+        var et=document.getElementById('s-open-end-time');
+        var etd=document.getElementById('s-open-end-time-display');
+        if(sd){sd.dataset.ymd=sdt.date;sd.value=App.admin._fmtYmdThai(sdt.date);}
+        if(st)st.value=sdt.time||'';
+        if(std)std.value=sdt.time||'';
+        if(ed){ed.dataset.ymd=edt.date;ed.value=App.admin._fmtYmdThai(edt.date);}
+        if(et)et.value=edt.time||'';
+        if(etd)etd.value=edt.time||'';
+        App.admin._renderShopHoursPreview();
         // PERF-FIX: users/logs are lazy-loaded on tab open
         App.admin._toggleCustomPaperField('ps-paper','ps-paper-custom-wrap');
         App.admin._toggleCustomPaperField('bp-paper','bp-paper-custom-wrap');
@@ -4159,11 +4368,20 @@ var App={
       setVal('n-line-target-id',s.notification_line_target_id||'');
       setVal('n-telegram-token',s.notification_telegram_bot_token_masked||'');
       setVal('n-telegram-chat-id',s.notification_telegram_chat_id||'');
+      setChecked('n-include-admin-link',s.notification_include_admin_link);
+      setVal('n-admin-link-url',s.notification_admin_url||'');
       App.admin.toggleNotificationChannel('line');
       App.admin.toggleNotificationChannel('telegram');
+      App.admin.toggleNotificationAdminLink();
       App.admin.updateNotificationStatusBadges();
       var ls=document.getElementById('line-test-status');if(ls){ls.textContent='';ls.style.color='';}
       var ts=document.getElementById('telegram-test-status');if(ts){ts.textContent='';ts.style.color='';}
+    },
+    toggleNotificationAdminLink:function(){
+      var wrap=document.getElementById('n-admin-link-url-wrap');
+      var tog=document.getElementById('n-include-admin-link');
+      if(!wrap||!tog)return;
+      wrap.classList.toggle('hidden',!tog.checked);
     },
     loadNotifications:function(force){
       var cached=!force?App.admin._getCache('notification_settings',45000):null;
@@ -4338,6 +4556,10 @@ var App={
         if(!tgChat)return 'กรุณากรอก Telegram Chat ID';
         if(!/^-?\d+$/.test(tgChat))return 'Telegram Chat ID ต้องเป็นตัวเลข เช่น 123456 หรือ -1001234567890';
       }
+      if(String(data.notification_include_admin_link||'0')==='1'){
+        var adminUrl=String(data.notification_admin_url||'').trim();
+        if(adminUrl&&!/^https:\/\//i.test(adminUrl))return 'ลิงก์หน้าแอดมินต้องขึ้นต้นด้วย https://';
+      }
       return '';
     },
     _collectNotificationData:function(){
@@ -4350,7 +4572,9 @@ var App={
         notification_line_target_id:gv('n-line-target-id'),
         notification_telegram_enabled:gc('n-telegram-enabled')?'1':'0',
         notification_telegram_bot_token:gv('n-telegram-token'),
-        notification_telegram_chat_id:gv('n-telegram-chat-id')
+        notification_telegram_chat_id:gv('n-telegram-chat-id'),
+        notification_include_admin_link:gc('n-include-admin-link')?'1':'0',
+        notification_admin_url:gv('n-admin-link-url')
       };
     },
     saveNotificationSettings:function(){
@@ -4358,6 +4582,9 @@ var App={
       var data=App.admin._collectNotificationData();
       var errMsg=App.admin._validateNotificationData(data,{forTest:false});
       if(errMsg){App.ui.toast(errMsg,'error');return;}
+      if(String(data.notification_include_admin_link||'0')==='1'&&!String(data.notification_admin_url||'').trim()){
+        App.ui.toast('เปิดแนบลิงก์แอดมินอยู่ แต่ยังไม่ได้กรอก URL ระบบจะไม่แนบลิงก์จนกว่าจะกรอก','warn',{duration:7000,closeButton:true});
+      }
       App.u.btnAction({
         debounceKey:'save_notify_settings',debounceMs:1800,
         btnId:'save-notification-btn',loadingText:'⏳ กำลังบันทึก...',successText:'บันทึกการตั้งค่าแจ้งเตือน',
@@ -4374,6 +4601,9 @@ var App={
       if(!App.admin.ensureCanEdit())return;
       var data=App.admin._collectNotificationData();
       data.notification_line_enabled='1';
+      if(String(data.notification_include_admin_link||'0')==='1'&&!String(data.notification_admin_url||'').trim()){
+        App.ui.toast('เปิดแนบลิงก์แอดมินอยู่ แต่ยังไม่ได้กรอก URL ข้อความทดสอบจะไม่แนบลิงก์','warn',{duration:7000,closeButton:true});
+      }
       var em=App.admin._validateNotificationData(data,{forTest:true,only:'line'});
       if(em){App.admin._setNotifyStatus('line-test-status','❌ '+em,'error');return;}
       App.admin._setNotifyStatus('line-test-status','กำลังทดสอบส่ง LINE...','info');
@@ -4393,6 +4623,9 @@ var App={
       if(!App.admin.ensureCanEdit())return;
       var data=App.admin._collectNotificationData();
       data.notification_telegram_enabled='1';
+      if(String(data.notification_include_admin_link||'0')==='1'&&!String(data.notification_admin_url||'').trim()){
+        App.ui.toast('เปิดแนบลิงก์แอดมินอยู่ แต่ยังไม่ได้กรอก URL ข้อความทดสอบจะไม่แนบลิงก์','warn',{duration:7000,closeButton:true});
+      }
       var em=App.admin._validateNotificationData(data,{forTest:true,only:'telegram'});
       if(em){App.admin._setNotifyStatus('telegram-test-status','❌ '+em,'error');return;}
       App.admin._setNotifyStatus('telegram-test-status','กำลังทดสอบส่ง Telegram...','info');
@@ -4433,33 +4666,201 @@ var App={
         App.admin._setNotifyStatus('line-test-status','✅ ดึง Group ID ล่าสุดสำเร็จและเติม Target ID แล้ว','success');
       },{silent:true});
     },
+    _logsState:{page:1,pageSize:30,hasMore:false,loading:false,items:[],hintTimer:null,warnTimer:null},
+    _setLogsSearchUiLoading:function(loading){
+      var buttons=document.querySelectorAll('[data-logs-search-btn="1"]');
+      buttons.forEach(function(btn){
+        if(!btn)return;
+        if(!btn.dataset.defaultText)btn.dataset.defaultText=String(btn.textContent||'ค้นหา');
+        btn.disabled=!!loading;
+        btn.textContent=loading?(btn.id==='logs-refresh-btn'?'กำลังโหลด...':'กำลังค้นหา...'):String(btn.dataset.defaultText||'ค้นหา');
+      });
+    },
+    setLogsLoading:function(isLoading,message){
+      var tb=document.getElementById('activity-log-table');
+      if(tb&&isLoading){
+        tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text2)">'+App.u.esc(String(message||'กำลังค้นหา Logs...'))+'</td></tr>';
+      }
+      App.admin._setLogsSearchUiLoading(!!isLoading);
+      var moreBtn=document.getElementById('logs-load-more-btn');
+      if(moreBtn)moreBtn.disabled=!!isLoading;
+    },
+    _setLogsSearchStatus:function(msg,type){
+      var el=document.getElementById('logs-search-status');
+      if(!el)return;
+      el.textContent=String(msg||'');
+      el.style.color=(type==='warn')?'#f59e0b':'var(--text2)';
+    },
+    _renderLogsLoadingRow:function(msg){
+      var tb=document.getElementById('activity-log-table');if(!tb)return;
+      tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text2)">'+App.u.esc(msg||'กำลังค้นหา Logs...')+'</td></tr>';
+    },
+    _setLogsLastLoaded:function(prefix){
+      var el=document.getElementById('logs-last-loaded');
+      if(!el)return;
+      var now=new Date();
+      var hh=String(now.getHours()).padStart(2,'0');
+      var mm=String(now.getMinutes()).padStart(2,'0');
+      var ss=String(now.getSeconds()).padStart(2,'0');
+      el.textContent=(prefix?String(prefix).trim()+' • ':'')+'โหลดล่าสุด: '+hh+':'+mm+':'+ss;
+    },
+    _getLogsFilters:function(){
+      var getVal=function(id){var el=document.getElementById(id);return el?String(el.value||'').trim():'';};
+      return {
+        dateFrom:String(App.admin._logsDateFrom||'').trim(),
+        dateTo:String(App.admin._logsDateTo||'').trim(),
+        module:getVal('logs-module'),
+        level:getVal('logs-level'),
+        status:getVal('logs-status'),
+        search:getVal('logs-search')
+      };
+    },
+    quickPickLogsDateRange:function(type){
+      var now=new Date();
+      now.setHours(0,0,0,0);
+      if(type==='clear'){
+        App.admin._logsDateFrom='';
+        App.admin._logsDateTo='';
+      }else if(type==='today'){
+        var t=App.admin._dateToYmd(now);
+        App.admin._logsDateFrom=t;App.admin._logsDateTo=t;
+      }else{
+        var d=parseInt(type,10)||7;
+        var from=new Date(now.getTime());
+        from.setDate(from.getDate()-(d-1));
+        App.admin._logsDateFrom=App.admin._dateToYmd(from);
+        App.admin._logsDateTo=App.admin._dateToYmd(now);
+      }
+      App.admin._syncDateInputs('logs');
+      App.admin._renderLogsDatePreview();
+      App.admin.loadActivityLogs(true);
+    },
+    _renderLogsDatePreview:function(){
+      var out=document.getElementById('logs-date-preview');
+      if(!out)return;
+      var from=String(App.admin._logsDateFrom||'').trim();
+      var to=String(App.admin._logsDateTo||'').trim();
+      if(!from&&!to){out.textContent='ช่วงวันที่: ทั้งหมด';return;}
+      if(from&&to){out.textContent='ช่วงวันที่: '+App.u.formatDateTH(from)+' ถึง '+App.u.formatDateTH(to);return;}
+      if(from){out.textContent='ช่วงวันที่: ตั้งแต่ '+App.u.formatDateTH(from);return;}
+      out.textContent='ช่วงวันที่: ถึง '+App.u.formatDateTH(to);
+    },
+    onLogsFilterInput:function(){
+      if(App.admin._logsFilterTimer)clearTimeout(App.admin._logsFilterTimer);
+      App.admin._logsFilterTimer=setTimeout(function(){App.admin.loadActivityLogs(true);},260);
+    },
+    loadMoreLogs:function(){
+      var st=App.admin._logsState||{};
+      if(!st.hasMore||st.loading)return;
+      st.page=(parseInt(st.page||1,10)||1)+1;
+      App.admin._fetchLogsPage(false);
+    },
+    cleanupLogs:function(){
+      if(!App.admin.ensureCanEdit())return;
+      App.ui.confirm('ต้องการล้าง Logs เก่าหรือไม่? ระบบจะลบเฉพาะ Logs ปกติที่เก่ากว่า 7 วัน ไม่ลบ Logs ล่าสุด',function(ok){
+        if(!ok)return;
+        var cleanBtn=document.getElementById('logs-cleanup-btn');
+        if(cleanBtn)App.ui.setBtn(cleanBtn,true,'กำลังล้าง...');
+        App.admin.setLogsLoading(true,'กำลังล้าง Logs เก่า...');
+        App.admin._setLogsSearchStatus('กำลังล้าง Logs เก่า...','info');
+        App.api.call('cleanupLogs',[App.state.adminToken],function(res){
+          if(cleanBtn)App.ui.setBtn(cleanBtn,false,'ล้าง Logs เก่า');
+          if(App.admin._auth(res)){App.admin.setLogsLoading(false);return;}
+          if(!res||!res.success){
+            App.admin.setLogsLoading(false);
+            App.ui.toast((res&&res.message)||'ล้าง Logs ไม่สำเร็จ','error',{duration:6500,closeButton:true});
+            return;
+          }
+          var deleted=(res.data&&res.data.deleted)||0;
+          App.ui.toast('ล้าง Logs เก่าแล้ว '+deleted+' รายการ','success',{duration:1800});
+          App.admin._setLogsSearchStatus('ล้าง Logs เก่าแล้ว '+deleted+' รายการ','info');
+          App.admin._setLogsLastLoaded('ล้างข้อมูลแล้ว');
+          App.admin.loadActivityLogs(true);
+        },{silent:true,noLoader:true});
+      },{okText:'ล้าง Logs เก่า',cancelText:'ยกเลิก'});
+    },
+    _fetchLogsPage:function(reset){
+      var st=App.admin._logsState||{};
+      if(st.loading)return;
+      st.loading=true;
+      if(st.hintTimer)clearTimeout(st.hintTimer);
+      if(st.warnTimer)clearTimeout(st.warnTimer);
+      App.admin.setLogsLoading(true,reset?'กำลังค้นหา Logs...':'กำลังโหลด Logs เพิ่ม...');
+      App.admin._setLogsSearchStatus('', '');
+      st.hintTimer=setTimeout(function(){
+        if(st.loading)App.admin._setLogsSearchStatus('กำลังค้นหา Logs หากข้อมูลเยอะอาจใช้เวลาสักครู่','info');
+      },3000);
+      st.warnTimer=setTimeout(function(){
+        if(st.loading)App.admin._setLogsSearchStatus('ค้นหานานกว่าปกติ แนะนำลดช่วงวันที่หรือเพิ่มตัวกรอง','warn');
+      },10000);
+      var btn=document.getElementById('logs-load-more-btn');
+      if(btn)App.ui.setBtn(btn,true,'⏳ กำลังโหลด...');
+      var filters=App.admin._getLogsFilters();
+      App.api.call('getLogs',[Object.assign({},filters,{page:st.page||1,pageSize:st.pageSize||30}),App.state.adminToken],function(res){
+        st.loading=false;
+        if(st.hintTimer)clearTimeout(st.hintTimer);
+        if(st.warnTimer)clearTimeout(st.warnTimer);
+        App.admin.setLogsLoading(false);
+        App.admin._setLogsSearchStatus('', '');
+        if(btn)App.ui.setBtn(btn,false,'โหลดเพิ่ม');
+        if(App.admin._auth(res))return;
+        if(!res||!res.success){
+          App.ui.toast((res&&res.message)||'โหลด Logs ไม่สำเร็จ','error',{duration:6500,closeButton:true});
+          return;
+        }
+        var data=res.data||{};
+        var items=Array.isArray(data.items)?data.items:[];
+        st.hasMore=!!data.hasMore;
+        st.page=parseInt(data.page||st.page||1,10)||1;
+        st.items=reset?items:(st.items||[]).concat(items);
+        App.admin._renderActivityLogs(st.items);
+        App.admin._setLogsLastLoaded('รีเฟรชแล้ว');
+        if(btn)btn.style.display=st.hasMore?'':'none';
+      },{silent:true,noLoader:true,key:'logs_lite'});
+    },
     loadActivityLogs:function(force){
-      var cached=!force?App.admin._getCache('logs',15000):null;
-      if(cached){
-        App.admin._renderActivityLogs(cached);
+      App.admin._syncDateInputs('logs');
+      App.admin._renderLogsDatePreview();
+      var st=App.admin._logsState||{};
+      if(force){
+        st.page=1;
+        st.items=[];
+        st.hasMore=false;
+      }
+      if(!st.items||!st.items.length||force){
+        App.admin._fetchLogsPage(true);
         return;
       }
-      App.api.call('getActivityLogs',[App.state.adminToken,300],function(res){
-        if(App.admin._auth(res))return;
-        var logs=(res&&res.success&&Array.isArray(res.data))?res.data:[];
-        App.admin._setCache('logs',logs);
-        App.admin._renderActivityLogs(logs);
-      },{key:'activity_logs',loaderText:'กำลังโหลด Activity Logs...',silent:true,noLoader:true});
+      App.admin._renderActivityLogs(st.items);
+    },
+    loadLogs:function(force){
+      App.admin.loadActivityLogs(!!force);
     },
     _renderActivityLogs:function(logs){
       var tb=document.getElementById('activity-log-table');if(!tb)return;
-      if(!logs||!logs.length){tb.innerHTML='<tr><td colspan="3" style="text-align:center;padding:20px;color:var(--text2)">ยังไม่มีข้อมูล</td></tr>';return;}
+      if(!logs||!logs.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text2)">ไม่พบ Logs</td></tr>';return;}
       var e=App.u.esc;
+      var levelClass=function(level){
+        var l=String(level||'').toUpperCase();
+        if(l==='ERROR')return 'log-level-error';
+        if(l==='WARN')return 'log-level-warn';
+        if(l==='SECURITY')return 'log-level-security';
+        return 'log-level-info';
+      };
       tb.innerHTML=logs.map(function(x){
-        var dt=x&&x.created_at?new Date(x.created_at):null;
-        var dtx=(dt&&!isNaN(dt.getTime()))?dt.toLocaleString('th-TH'):'-';
-        var actor=String(x&&x.actor||'-');
-        var msg=String(x&&x.message||'').replace(/\[[^\]]*\]\s*/g,'').trim();
-        var detail=msg||'-';
+        var dtx=App.u.formatDateTimeTH(x&&(x.timestamp||x.created_at));
+        var lv=String(x&&x.level||'INFO').toUpperCase();
+        var mod=String(x&&x.module||'-');
+        var action=String(x&&x.action||'-');
+        var st=String(x&&x.status||'-');
+        var msg=String(x&&x.message||'').replace(/\[[^\]]*\]\s*/g,'').trim()||'-';
         return '<tr>'
           +'<td>'+e(dtx)+'</td>'
-          +'<td>'+e(actor)+'</td>'
-          +'<td>'+e(detail)+'</td>'
+          +'<td><span class="log-level-badge '+levelClass(lv)+'">'+e(lv)+'</span></td>'
+          +'<td>'+e(mod)+'</td>'
+          +'<td>'+e(action)+'</td>'
+          +'<td>'+e(st)+'</td>'
+          +'<td>'+e(msg)+'</td>'
         +'</tr>';
       }).join('');
     },
@@ -4501,6 +4902,7 @@ var App={
       var driveEl=document.getElementById('s-drive');
       var folderId=driveEl?App.admin._normalizeGoogleDriveFolderInput(driveEl):'';
       App.admin._setApiCheckStatus('api-drive-status','กำลังตรวจสอบ Google Drive...','info');
+      App.admin.refreshDriveStatus('checking',{message:'กำลังตรวจสอบสิทธิ์และการเข้าถึง...'});
       var btn=document.getElementById('btn-test-drive');
       if(btn)App.ui.setBtn(btn,true,'⏳ กำลังตรวจสอบ...');
       App.api.call('testGoogleDriveConnection',[{folderId:folderId},App.state.adminToken],function(res){
@@ -4510,15 +4912,146 @@ var App={
           var data=res.data||{};
           var m=data.message||'เชื่อมต่อ Google Drive สำเร็จ';
           App.admin._setApiCheckStatus('api-drive-status','✅ '+m,'success');
-          App.admin._showDriveEditorReminder();
+          App.admin.refreshDriveStatus('ready',{folderId:String(data.folderId||folderId||''),folderName:String(data.folderName||''),message:m});
+          App.ui.toast(m,'success',{duration:3200});
           return;
         }
-        App.admin._setApiCheckStatus('api-drive-status','❌ '+String((res&&res.message)||'ตรวจสอบไม่สำเร็จ'),'error');
-        App.admin._showDriveEditorReminder();
+        var em=String((res&&res.message)||'ตรวจสอบไม่สำเร็จ');
+        var needAuth=/auth|permission|สิทธิ์|authorize/i.test(em);
+        App.admin._setApiCheckStatus('api-drive-status','❌ '+em,'error');
+        App.admin.refreshDriveStatus(needAuth?'need_auth':'error',{message:em});
+        App.ui.toast(em,'error',{duration:9000,closeButton:true});
       },{silent:true});
+    },
+    _collectSettingsPayloadByTab:function(scope){
+      var getVal=function(id){var el=document.getElementById(id);return el?el.value:'';};
+      var getChecked=function(id){var el=document.getElementById(id);return !!(el&&el.checked);};
+      var payload={};
+      if(scope==='store'){
+        payload.restaurant_name=getVal('s-name');
+        payload.restaurant_logo=App.state._storeLogoB64||getVal('s-logo');
+        return payload;
+      }
+      if(scope==='order-info'){
+        var deliveryType=getVal('s-delivery-type-select')||getVal('s-delivery-type')||'village';
+        payload.departments=getVal('s-depts');
+        payload.delivery_category_type=deliveryType;
+        payload.delivery_note_mode=(String(deliveryType)==='village'?'address':'note');
+        return payload;
+      }
+      if(scope==='payment'){
+        var promptpayEnabled=getChecked('s-promptpay-enabled');
+        var cashEnabled=getChecked('s-cash-enabled');
+        var bankEnabled=getChecked('s-bank-enabled');
+        var promptpayNumber=App.u.digitsOnly(getVal('s-pp')||'');
+        if(!promptpayEnabled&&!cashEnabled&&!bankEnabled){
+          return {__error:'ต้องเปิดใช้งานการชำระเงินอย่างน้อย 1 วิธี'};
+        }
+        if(promptpayEnabled&&!promptpayNumber){
+          return {__error:'หากเปิดใช้ PromptPay กรุณากรอกเลข PromptPay'};
+        }
+        if(promptpayEnabled&&!App.u.isValidPromptPayId(promptpayNumber)){
+          return {__error:'เลข PromptPay ต้องเป็นมือถือ 10 หลัก หรือบัตรประชาชน 13 หลัก'};
+        }
+        var promptpayEl=document.getElementById('s-pp');if(promptpayEl)promptpayEl.value=promptpayNumber;
+        payload.promptpay=promptpayNumber;
+        payload.promptpay_enabled=promptpayEnabled?'1':'0';
+        payload.payee_name=getVal('s-payee');
+        payload.payment_timeout=getVal('s-timeout');
+        payload.cash_payment_enabled=cashEnabled?'1':'0';
+        payload.bank_payment_enabled=bankEnabled?'1':'0';
+        payload.slipok_api_key=getVal('s-slipok');
+        payload.slipok_branch_id=getVal('s-branch');
+        payload.payment_banks=JSON.stringify(App.state._banks||[]);
+        if(App.admin.isStaff()){
+          var raw=App.state._settingsRaw||{};
+          payload.slipok_api_key=String(raw.slipok_api_key||'');
+          payload.slipok_branch_id=String(raw.slipok_branch_id||'');
+        }
+        return payload;
+      }
+      if(scope==='drive'){
+        var driveEl=document.getElementById('s-drive');
+        var driveFolderId=driveEl?App.admin._normalizeGoogleDriveFolderInput(driveEl):'';
+        payload.drive_folder_id=driveFolderId;
+        return payload;
+      }
+      return null;
+    },
+    saveSettingsTab:function(tab){
+      var scope=String(tab||'').trim().toLowerCase();
+      if(scope==='shop-hours'){
+        App.admin.saveShopAvailability({silent:false});
+        return;
+      }
+      var btnMap={
+        store:'save-settings-store-btn',
+        'order-info':'save-settings-order-info-btn',
+        payment:'save-settings-payment-btn',
+        drive:'btn-create-drive-folder'
+      };
+      var successMap={
+        store:'✅ บันทึกข้อมูลร้านแล้ว',
+        'order-info':'✅ บันทึกข้อมูลลูกค้าแล้ว',
+        payment:'✅ บันทึกการชำระเงินแล้ว',
+        drive:'✅ บันทึกค่า Google Drive แล้ว'
+      };
+      var payload=App.admin._collectSettingsPayloadByTab(scope);
+      if(!payload){
+        App.ui.toast('ไม่รู้จักแท็บที่ต้องการบันทึก','error',{duration:6500,closeButton:true});
+        return;
+      }
+      if(payload.__error){
+        App.ui.toast(String(payload.__error||'ข้อมูลไม่ถูกต้อง'),'error',{duration:6500,closeButton:true});
+        return;
+      }
+      App.u.btnAction({
+        debounceKey:'save_settings_'+scope,debounceMs:1400,
+        btnId:btnMap[scope]||'save-settings-btn',loadingText:'⏳ กำลังบันทึก...',successText:'บันทึกแล้ว',
+        successMsg:successMap[scope]||'✅ บันทึกการตั้งค่าแล้ว',
+        onSuccess:function(){App.admin._invalidateCache(['settings','menu']);App.admin.loadSettings(true);}
+      },function(done){
+        var commitPayload=function(finalPayload){
+          App.api.call('saveSettings',[finalPayload,App.state.adminToken],function(res){
+            if(App.admin._auth(res))return;
+            if(res&&res.success&&scope==='store'){
+              App.state._storeLogoB64=null;
+              App.state._storeLogoSrcUrl=String(finalPayload.restaurant_logo||'');
+              App.ui.applyGlobalBrand(finalPayload.restaurant_name,finalPayload.restaurant_logo);
+            }
+            done(res);
+          });
+        };
+        if(scope!=='store'){
+          commitPayload(payload);
+          return;
+        }
+        var logoRaw=String(payload.restaurant_logo||'');
+        var isDataLogo=(logoRaw.indexOf('data:image')===0);
+        if(!isDataLogo){
+          commitPayload(payload);
+          return;
+        }
+        var mimeType=logoRaw.split(';')[0].split(':')[1]||'image/jpeg';
+        var rawB64=logoRaw.split(',')[1]||'';
+        if(!rawB64){
+          done({success:false,message:'ข้อมูลโลโก้ไม่ถูกต้อง กรุณาเลือกไฟล์ใหม่'});
+          return;
+        }
+        App.ui.toast('⏳ กำลังอัปโหลดโลโก้ร้าน...','info');
+        App.api.call('uploadImageToDrive',[rawB64,'logo_'+Date.now()+'.jpg',mimeType,App.state.adminToken],function(upRes){
+          if(upRes&&upRes.success&&upRes.data&&upRes.data.url){
+            var nextPayload=Object.assign({},payload,{restaurant_logo:String(upRes.data.url||'')});
+            commitPayload(nextPayload);
+            return;
+          }
+          done(upRes||{success:false,message:'อัปโหลดโลโก้ไม่สำเร็จ'});
+        },{key:'logo_upload'});
+      });
     },
     saveSettings(){
       if(!App.admin.ensureCanEdit())return;
+      App.admin._syncShopHoursHidden();
       var getVal=function(id){var el=document.getElementById(id);return el?el.value:'';};
       var openStart=getVal('s-open-start'),openEnd=getVal('s-open-end');
       if((openStart&&!openEnd)||(!openStart&&openEnd)){App.ui.toast('กรุณาระบุช่วงเวลาเปิดให้ครบทั้งเริ่มและสิ้นสุด','error');return;}
@@ -4586,6 +5119,7 @@ var App={
     },
     saveShopAvailability:function(opts){
       opts=opts||{};
+      App.admin._syncShopHoursHidden();
       if(App.admin.isReadOnly()){
         if(!res||!res.success){App.ui.toast((res&&res.message)||'ยืนยันรับเงินสดไม่สำเร็จ','warn');return;}
         return;
@@ -4627,6 +5161,62 @@ var App={
     onShopToggleChanged:function(checked){
       // เปลี่ยนเฉพาะสถานะในฟอร์มก่อน และจะบันทึกจริงเมื่อกดปุ่ม "บันทึกการตั้งค่า"
       App.admin.renderShopStatus(checked);
+      App.admin._renderShopHoursPreview();
+    },
+    _syncShopHoursHidden:function(){
+      var join=function(dateElId,timeElId,hiddenId){
+        var dEl=document.getElementById(dateElId);
+        var tEl=document.getElementById(timeElId);
+        var hEl=document.getElementById(hiddenId);
+        if(!hEl)return;
+        var ymd=String((dEl&&dEl.dataset&&dEl.dataset.ymd)||'').trim();
+        var tm=String((tEl&&tEl.value)||'').trim();
+        hEl.value=(ymd&&tm)?(ymd+'T'+tm):'';
+      };
+      var startDateEl=document.getElementById('s-open-start-date');
+      var endDateEl=document.getElementById('s-open-end-date');
+      var startTimeEl=document.getElementById('s-open-start-time');
+      var endTimeEl=document.getElementById('s-open-end-time');
+      if(startDateEl&&String(startDateEl.dataset.ymd||'').trim()&&!String(startTimeEl&&startTimeEl.value||'').trim()&&startTimeEl){
+        startTimeEl.value='08:00';
+      }
+      if(endDateEl&&String(endDateEl.dataset.ymd||'').trim()&&!String(endTimeEl&&endTimeEl.value||'').trim()&&endTimeEl){
+        endTimeEl.value='17:00';
+      }
+      var startTimeDisplay=document.getElementById('s-open-start-time-display');
+      var endTimeDisplay=document.getElementById('s-open-end-time-display');
+      if(startTimeDisplay)startTimeDisplay.value=String(startTimeEl&&startTimeEl.value||'').trim()||'';
+      if(endTimeDisplay)endTimeDisplay.value=String(endTimeEl&&endTimeEl.value||'').trim()||'';
+      join('s-open-start-date','s-open-start-time','s-open-start');
+      join('s-open-end-date','s-open-end-time','s-open-end');
+      App.admin._renderShopHoursPreview();
+    },
+    quickSetShopHoursDate:function(which,mode){
+      var dEl=(which==='end')?document.getElementById('s-open-end-date'):document.getElementById('s-open-start-date');
+      if(!dEl)return;
+      if(mode==='clear'){
+        dEl.dataset.ymd='';dEl.value='';
+      }else{
+        var d=new Date();d.setHours(0,0,0,0);
+        if(mode==='tomorrow')d.setDate(d.getDate()+1);
+        var ymd=App.admin._dateToYmd(d);
+        dEl.dataset.ymd=ymd;
+        dEl.value=App.admin._fmtYmdThai(ymd);
+        var tEl=(which==='end')?document.getElementById('s-open-end-time'):document.getElementById('s-open-start-time');
+        if(tEl&&!String(tEl.value||'').trim())tEl.value=(which==='end'?'17:00':'08:00');
+      }
+      App.admin._syncShopHoursHidden();
+    },
+    _renderShopHoursPreview:function(){
+      var startEl=document.getElementById('s-open-start');
+      var endEl=document.getElementById('s-open-end');
+      var preview=document.getElementById('shop-hours-preview');
+      if(!preview)return;
+      var startRaw=String(startEl&&startEl.value||'').trim();
+      var endRaw=String(endEl&&endEl.value||'').trim();
+      if(!startRaw&&!endRaw){preview.textContent='ช่วงเวลา: ใช้ตามสวิตช์เปิด/ปิดร้าน';return;}
+      if((startRaw&&!endRaw)||(!startRaw&&endRaw)){preview.textContent='ช่วงเวลา: กรุณาระบุวันเวลาเริ่มและสิ้นสุดให้ครบ';return;}
+      preview.textContent='ช่วงเวลา: '+App.u.formatDateTimeTH(startRaw)+' ถึง '+App.u.formatDateTimeTH(endRaw);
     },
 
     // BANK MANAGEMENT
@@ -4763,7 +5353,7 @@ var App={
     },
 
     // ─── ORDERS PAGE ──────────────────────────────────────────
-    _ordersData:[],_ordersFilter:'all',_ordersFilterDept:'all',_ordersFilterDate:'all',_ordersDateFrom:'',_ordersDateTo:'',_ordersAutoTimer:null,_ordersRetry:0,_ordersSearch:'',_ordersSearchTimer:null,_ordersFp:'',_ordersViewCache:{key:'',data:null},_ordersDeptSig:'',_ordersPollingBusy:false,_ordersRefreshBusy:false,_ordersSoundEnabled:true,_ordersNewFlashIds:{},_datePickerState:{context:'orders',target:'from',month:0,year:0,from:'',to:''},
+    _ordersData:[],_ordersFilter:'all',_ordersFilterDept:'all',_ordersFilterDate:'all',_ordersDateFrom:'',_ordersDateTo:'',_ordersAutoTimer:null,_ordersRetry:0,_ordersSearch:'',_ordersSearchTimer:null,_ordersFp:'',_ordersViewCache:{key:'',data:null},_ordersDeptSig:'',_ordersPollingBusy:false,_ordersRefreshBusy:false,_ordersSoundEnabled:true,_ordersNewFlashIds:{},_logsDateFrom:'',_logsDateTo:'',_datePickerState:{context:'orders',target:'from',month:0,year:0,from:'',to:''},_timePickerState:{context:'shop-hours',field:'openStartTime',hour:-1,minute:-1},
     _syncOrdersSoundToggle:function(){
       try{
         var raw=localStorage.getItem('fo_admin_new_order_sound_v1');
@@ -5124,6 +5714,11 @@ var App={
         var ot=document.getElementById('orders-date-to');
         if(of)of.value=String(App.admin._ordersDateFrom||'');
         if(ot)ot.value=String(App.admin._ordersDateTo||'');
+      }else if(context==='logs'){
+        var lf=document.getElementById('logs-date-from');
+        var lt=document.getElementById('logs-date-to');
+        if(lf)lf.value=App.admin._fmtYmdThai(String(App.admin._logsDateFrom||''));
+        if(lt)lt.value=App.admin._fmtYmdThai(String(App.admin._logsDateTo||''));
       }else{
         var bf=document.getElementById('bp-date-from');
         var bt=document.getElementById('bp-date-to');
@@ -5132,21 +5727,29 @@ var App={
       }
     },
     openDatePickerPopup:function(context,target){
-      var ctx=(context==='batch')?'batch':'orders';
-      var tg=(target==='to')?'to':'from';
+      var ctx=(context==='batch'||context==='logs'||context==='shop-hours')?context:'orders';
+      var tg=(target==='to'||target==='openEndDate')?target:'from';
+      if(tg!=='from'&&tg!=='to'&&tg!=='openStartDate'&&tg!=='openEndDate')tg='from';
       var st=App.admin._datePickerState||{};
       st.context=ctx;
       st.target=tg;
       if(ctx==='orders'){
         st.from=String(App.admin._ordersDateFrom||'').trim();
         st.to=String(App.admin._ordersDateTo||'').trim();
+      }else if(ctx==='logs'){
+        st.from=String(App.admin._logsDateFrom||'').trim();
+        st.to=String(App.admin._logsDateTo||'').trim();
+      }else if(ctx==='shop-hours'){
+        st.from=String((document.getElementById('s-open-start-date')&&document.getElementById('s-open-start-date').dataset.ymd)||'').trim();
+        st.to=String((document.getElementById('s-open-end-date')&&document.getElementById('s-open-end-date').dataset.ymd)||'').trim();
       }else{
         var bf=document.getElementById('bp-date-from');
         var bt=document.getElementById('bp-date-to');
         st.from=String(bf&&bf.value||'').trim();
         st.to=String(bt&&bt.value||'').trim();
       }
-      var base=App.admin._ymdToDate(st[tg])||App.admin._ymdToDate(st.from)||App.admin._ymdToDate(st.to)||new Date();
+      var baseKey=(tg==='openEndDate')?'to':'from';
+      var base=App.admin._ymdToDate(st[baseKey])||App.admin._ymdToDate(st.from)||App.admin._ymdToDate(st.to)||new Date();
       st.month=base.getMonth();
       st.year=base.getFullYear();
       App.admin._datePickerState=st;
@@ -5159,14 +5762,90 @@ var App={
       var pop=document.getElementById('date-picker-popup');
       if(pop)pop.classList.remove('active');
     },
+    openTimePickerPopup:function(context,field){
+      var ctx=(context==='shop-hours')?'shop-hours':'shop-hours';
+      var f=(field==='openEndTime')?'openEndTime':'openStartTime';
+      var st=App.admin._timePickerState||{};
+      st.context=ctx;
+      st.field=f;
+      var sourceId=(f==='openEndTime')?'s-open-end-time':'s-open-start-time';
+      var cur=String((document.getElementById(sourceId)&&document.getElementById(sourceId).value)||'').trim();
+      if(!/^\d{2}:\d{2}$/.test(cur))cur=(f==='openEndTime'?'17:00':'08:00');
+      st.hour=parseInt(cur.split(':')[0],10);
+      st.minute=parseInt(cur.split(':')[1],10);
+      App.admin._timePickerState=st;
+      var titleEl=document.getElementById('tp-title');
+      if(titleEl)titleEl.textContent=(f==='openEndTime'?'🕒 เลือกเวลาปิดร้าน':'🕒 เลือกเวลาเปิดร้าน');
+      var pop=document.getElementById('time-picker-popup');
+      if(pop)pop.classList.add('active');
+      App.admin._renderTimePickerPopup();
+    },
+    closeTimePickerPopup:function(){
+      var pop=document.getElementById('time-picker-popup');
+      if(pop)pop.classList.remove('active');
+    },
+    setTimePickerValue:function(hour,minute){
+      var st=App.admin._timePickerState||{};
+      var h=Math.max(0,Math.min(23,parseInt(hour,10)||0));
+      var m=Math.max(0,Math.min(59,parseInt(minute,10)||0));
+      st.hour=h;st.minute=m;
+      App.admin._timePickerState=st;
+      App.admin._renderTimePickerPopup();
+    },
+    clearTimePickerValue:function(){
+      var st=App.admin._timePickerState||{};
+      st.hour=-1;st.minute=-1;
+      App.admin._timePickerState=st;
+      App.admin._renderTimePickerPopup();
+    },
+    _renderTimePickerPopup:function(){
+      var st=App.admin._timePickerState||{};
+      var hh=parseInt(st.hour,10),mm=parseInt(st.minute,10);
+      var curEl=document.getElementById('tp-current');
+      if(curEl)curEl.textContent=(hh>=0&&mm>=0)?(String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')):'--:--';
+      var hourGrid=document.getElementById('tp-hour-grid');
+      var minuteGrid=document.getElementById('tp-minute-grid');
+      if(hourGrid){
+        var hhtml='';
+        for(var h=0;h<24;h++){
+          var hs=String(h).padStart(2,'0');
+          hhtml+='<button type="button" class="time-chip'+(h===hh?' active':'')+'" onclick="App.admin.setTimePickerValue('+h+','+(mm>=0?mm:0)+')">'+hs+'</button>';
+        }
+        hourGrid.innerHTML=hhtml;
+      }
+      if(minuteGrid){
+        var mhtml='';
+        var mins=[0,5,10,15,20,25,30,35,40,45,50,55];
+        mins.forEach(function(m){
+          var ms=String(m).padStart(2,'0');
+          mhtml+='<button type="button" class="time-chip'+(m===mm?' active':'')+'" onclick="App.admin.setTimePickerValue('+(hh>=0?hh:8)+','+m+')">'+ms+'</button>';
+        });
+        minuteGrid.innerHTML=mhtml;
+      }
+    },
+    applyTimePickerPopup:function(){
+      var st=App.admin._timePickerState||{};
+      var field=String(st.field||'openStartTime');
+      var targetId=(field==='openEndTime')?'s-open-end-time':'s-open-start-time';
+      var tEl=document.getElementById(targetId);
+      if(tEl){
+        if(parseInt(st.hour,10)>=0&&parseInt(st.minute,10)>=0){
+          tEl.value=String(parseInt(st.hour,10)).padStart(2,'0')+':'+String(parseInt(st.minute,10)).padStart(2,'0');
+        }else{
+          tEl.value='';
+        }
+      }
+      App.admin._syncShopHoursHidden();
+      App.admin.closeTimePickerPopup();
+    },
     setDatePickerTarget:function(target){
       var st=App.admin._datePickerState||{};
-      st.target=(target==='to')?'to':'from';
+      st.target=(target==='to'||target==='openEndDate')?target:'from';
       App.admin._datePickerState=st;
       var f=document.getElementById('dp-tab-from');
       var t=document.getElementById('dp-tab-to');
-      if(f)f.classList.toggle('active',st.target==='from');
-      if(t)t.classList.toggle('active',st.target==='to');
+      if(f)f.classList.toggle('active',st.target==='from'||st.target==='openStartDate');
+      if(t)t.classList.toggle('active',st.target==='to'||st.target==='openEndDate');
       App.admin._renderDatePickerPopup();
     },
     shiftDatePickerMonth:function(delta){
@@ -5184,7 +5863,7 @@ var App={
     _pickDateFromPopup:function(ymd){
       var st=App.admin._datePickerState||{};
       if(!App.admin._isYmd(ymd))return;
-      if(st.target==='to')st.to=ymd;
+      if(st.target==='to'||st.target==='openEndDate')st.to=ymd;
       else st.from=ymd;
       if(st.from&&st.to&&st.from>st.to){
         if(st.target==='from')st.to=st.from;
@@ -5251,7 +5930,7 @@ var App={
     },
     applyDatePickerPopup:function(){
       var st=App.admin._datePickerState||{};
-      var ctx=st.context==='batch'?'batch':'orders';
+      var ctx=(st.context==='batch'||st.context==='logs'||st.context==='shop-hours')?st.context:'orders';
       var from=String(st.from||'').trim();
       var to=String(st.to||'').trim();
       if(from&&to&&from>to){
@@ -5263,6 +5942,17 @@ var App={
         App.admin._ordersDateTo=to;
         App.admin._syncDateInputs('orders');
         App.admin.applyOrdersDateRange();
+      }else if(ctx==='logs'){
+        App.admin._logsDateFrom=from;
+        App.admin._logsDateTo=to;
+        App.admin._syncDateInputs('logs');
+        App.admin.loadActivityLogs(true);
+      }else if(ctx==='shop-hours'){
+        var sd=document.getElementById('s-open-start-date');
+        var ed=document.getElementById('s-open-end-date');
+        if(sd){sd.dataset.ymd=from;sd.value=App.admin._fmtYmdThai(from);}
+        if(ed){ed.dataset.ymd=to;ed.value=App.admin._fmtYmdThai(to);}
+        App.admin._syncShopHoursHidden();
       }else{
         var bf=document.getElementById('bp-date-from');
         var bt=document.getElementById('bp-date-to');
@@ -5768,6 +6458,12 @@ var App={
         var glowAt=App.admin._ordersNewFlashIds[oid];
         if(glowAt&&((Date.now()-glowAt)<30000))isNewGlow=true;
         else if(glowAt)delete App.admin._ordersNewFlashIds[oid];
+        var orderNote=String(o&&((o.note!=null&&o.note!=='')?o.note:o.order_note)||'').trim();
+        var customerNote=String(o&&((o.customer_note!=null&&o.customer_note!=='')?o.customer_note:o.customerNote)||'').trim();
+        if(/^error$/i.test(customerNote)||customerNote==='[object Object]'){
+          console.warn('Skip invalid customer note for order',oid,customerNote);
+          customerNote='';
+        }
         return'<div class="order-row'+(isNewGlow?' order-row-new':'')+'">'
           +'<div class="order-row-meta">'
             +'<div class="order-seq">#'+seq+'</div>'
@@ -5778,8 +6474,8 @@ var App={
             +'<div class="order-row-customer">👤 '+e(o.customer||'?')+((showDeptOnOrderCard&&o.department)?' &nbsp;<span style="font-size:12px;color:var(--text2)">🏢 '+e(o.department)+'</span>':'')+'</div>'
             +'<div class="text-xs" style="margin:4px 0;color:'+(String(o.payment_method||'').toLowerCase()==='cash'?'#b91c1c':'var(--text2)')+';font-weight:'+(String(o.payment_method||'').toLowerCase()==='cash'?'700':'500')+'">💳 '+e(App.admin._payMethodLabel(o.payment_method||''))+'</div>'
             +'<div class="order-row-items">'+itemsHtml+'</div>'
-            +(o.note?'<div class="text-xs text-muted" style="margin-top:4px">'+(App.admin._getDeliveryCategoryType()==='village'?'📍 ':'📝 ')+e(o.note)+'</div>':'')
-            +(o.customer_note?'<div class="text-xs text-muted" style="margin-top:4px">💬 '+e(App.admin._customerNoteLabel())+': '+e(o.customer_note)+'</div>':'')
+            +(orderNote?'<div class="text-xs text-muted" style="margin-top:4px">'+(App.admin._getDeliveryCategoryType()==='village'?'📍 ':'📝 ')+e(orderNote)+'</div>':'')
+            +(customerNote?'<div class="text-xs text-muted" style="margin-top:4px">💬 '+e(App.admin._customerNoteLabel())+': '+e(customerNote)+'</div>':'')
           +'</div>'
           +'<div class="order-row-right">'
             +'<span class="badge '+st.cls+'" style="margin-bottom:2px">'+e(st.label)+'</span>'
@@ -5857,6 +6553,10 @@ var App={
       var header=['ลำดับ','รหัสออเดอร์','วันที่เวลา','ชื่อลูกค้า',App.admin._deptLabel(),'รายการอาหาร','ยอดรวม','วิธีชำระเงิน','สถานะ',App.admin._noteLabel(),App.admin._customerNoteLabel()];
       var lines=[header.map(App.admin._csvCell).join(',')];
       rows.forEach(function(o,idx){
+        var orderNote=String((o&&((o.note!=null&&o.note!=='')?o.note:o.order_note))||'').trim();
+        var customerNote=String((o&&((o.customer_note!=null&&o.customer_note!=='')?o.customer_note:o.customerNote))||'').trim();
+        if(/^error$/i.test(orderNote)||orderNote==='[object Object]')orderNote='';
+        if(/^error$/i.test(customerNote)||customerNote==='[object Object]')customerNote='';
         var items=(o.items||[]).map(function(it){
           var qty=parseInt(it.qty||1);
           var nm=String(it.name||'');
@@ -5873,8 +6573,8 @@ var App={
           Math.round(parseFloat(o.total||0)),
           App.admin._payMethodLabel(o.payment_method||''),
           o.status||'',
-          o.note||'',
-          o.customer_note||''
+          orderNote,
+          customerNote
         ];
         lines.push(line.map(App.admin._csvCell).join(','));
       });
@@ -6741,9 +7441,13 @@ var App={
         return s.split(/\r?\n|,/).map(function(x){return String(x||'').replace(/^[^:：]+[:：]\s*/,'').trim();}).filter(Boolean);
       };
       var isVillage=App.admin._getDeliveryCategoryType()==='village';
-      var customerAddress=isVillage?String(o&&o.note||'').trim():'';
-      var orderDetail=isVillage?String(o&&o.customer_note||'').trim():String(o&&o.note||'').trim();
-      var orderDetailExtra=isVillage?'':String(o&&o.customer_note||'').trim();
+      var orderNoteRaw=String(o&&((o.note!=null&&o.note!=='')?o.note:o.order_note)||'').trim();
+      var customerNoteRaw=String(o&&((o.customer_note!=null&&o.customer_note!=='')?o.customer_note:o.customerNote)||'').trim();
+      if(/^error$/i.test(orderNoteRaw)||orderNoteRaw==='[object Object]')orderNoteRaw='';
+      if(/^error$/i.test(customerNoteRaw)||customerNoteRaw==='[object Object]')customerNoteRaw='';
+      var customerAddress=isVillage?orderNoteRaw:'';
+      var orderDetail=isVillage?customerNoteRaw:orderNoteRaw;
+      var orderDetailExtra=isVillage?'':customerNoteRaw;
       var noFrame=!!App.admin._printPdfNoFrame;
       if(tab==='receipt'){
         var sizeVal=mode==='batch'?App.admin._resolvePaperSize('bp-paper','bp-paper-custom','80mm'):App.admin._resolvePaperSize('ps-paper','ps-paper-custom','80mm');
@@ -6923,6 +7627,16 @@ var App={
 
   init:function(){
     var isAdmin=(window._isAdmin===true);
+    try{
+      var braw=localStorage.getItem('fo_brand_cache_v1')||'';
+      if(braw){
+        var b=JSON.parse(braw||'{}');
+        if(b&&typeof b==='object'){
+          if(b.name)window._restaurantName=String(b.name||window._restaurantName||'FoodOrder');
+          if(b.logo!=null)window._restaurantLogo=String(b.logo||window._restaurantLogo||'');
+        }
+      }
+    }catch(_){}
     App.state._deliveryCategoryType=App.admin._normalizeDeliveryType(window._deliveryCategoryType||App.state._deliveryCategoryType||'village');
     App.state._deliveryNoteMode=(App.state._deliveryCategoryType==='village'?'address':'note');
     App.state._cashPaymentEnabled=(window._cashPaymentEnabled===true);
@@ -6931,8 +7645,7 @@ var App={
     App.customer.applyOrderInfoLabels();
     App.customer.applyPaymentMethodUI();
     // show restaurant brand
-    App.customer.applyBrand(window._restaurantName||'FoodOrder',window._restaurantLogo||'');
-    App.admin.applyAdminBrand(window._restaurantName||'FoodOrder',window._restaurantLogo||'');
+    App.ui.applyGlobalBrand(window._restaurantName||'FoodOrder',window._restaurantLogo||'');
     
     var ae=document.getElementById('admin-app'),ce=document.getElementById('customer-app');
     App.state._navigating=false;
@@ -6944,6 +7657,31 @@ var App={
       App.customer.refreshShopAvailability();
       App.customer.startShopAvailabilityPoll();
       App.ui.nav('menu');
+    }
+    document.querySelectorAll('.admin-modal').forEach(function(modal){
+      if(modal._overlayCloseBound)return;
+      modal.addEventListener('click',function(ev){
+        if(ev.target!==modal)return;
+        App.admin.closeAdminModal(modal.id);
+      });
+      modal._overlayCloseBound=true;
+    });
+    if(!document.body._adminEscBound){
+      document.addEventListener('keydown',function(ev){
+        if(ev.key!=='Escape')return;
+        var crop=document.getElementById('crop-modal');
+        if(crop&&crop.style.display==='flex'){App.admin.closeCropModal();return;}
+        var active=document.querySelector('.admin-modal.active');
+        if(active)App.admin.closeAdminModal(active.id);
+      });
+      document.body._adminEscBound=true;
+    }
+    var cropModal=document.getElementById('crop-modal');
+    if(cropModal&&!cropModal._overlayCloseBound){
+      cropModal.addEventListener('click',function(ev){
+        if(ev.target===cropModal)App.admin.closeCropModal();
+      });
+      cropModal._overlayCloseBound=true;
     }
   }
 };
