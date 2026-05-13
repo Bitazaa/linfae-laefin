@@ -1893,7 +1893,7 @@ var App={
     },
     _getDefaultPaperPresets:function(kind){
       if(kind==='receipt')return ['80mm','72mm','58mm','30mm'];
-      return ['100x70','70x100','100x100','62x29'];
+      return ['50x30','62x29','100x70','70x100','100x100'];
     },
     _getPaperPresetList:function(kind){
       var defs=App.admin._getDefaultPaperPresets(kind);
@@ -2930,45 +2930,79 @@ var App={
       });
       return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sticker Print</title><style>'+css+'</style></head><body>'+body+'</body></html>';
     },
-    _openStickerPrintWindow:function(html){
+    _openStickerPrintWindow:function(html,target){
       var output=String(html||'').trim();
-      if(!output)return false;
-      var w=null;
-      try{w=window.open('','_blank','noopener,noreferrer,width=560,height=760');}catch(_){w=null;}
-      if(w&&w.document){
-        try{
-          w.document.open();
-          w.document.write(output);
-          w.document.close();
-          setTimeout(function(){try{w.focus();w.print();}catch(_e){}},450);
-          return true;
-        }catch(_2){}
+      if(!output)return {ok:false,popupBlocked:false,mode:'none'};
+      var popupBlocked=false;
+      var win=(target&&target.win)?target.win:null;
+      if(!win){
+        try{win=window.open('','ct221b_sticker_print','width=560,height=760');}catch(_){win=null;}
       }
+      if(win&&win.document){
+        try{
+          win.document.open();
+          win.document.write(output);
+          win.document.close();
+          var after=function(){try{win.removeEventListener('afterprint',after);}catch(_a){};setTimeout(function(){try{win.close();}catch(_b){}},700);};
+          try{win.addEventListener('afterprint',after);}catch(_c){}
+          setTimeout(function(){try{win.focus();win.print();}catch(_e){}},500);
+          return {ok:true,popupBlocked:false,mode:'window'};
+        }catch(_2){popupBlocked=true;}
+      }else{popupBlocked=true;}
       var iw=document.createElement('iframe');
       iw.style.cssText='position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:0;opacity:0';
       document.body.appendChild(iw);
       var doc=iw.contentWindow&&iw.contentWindow.document;
-      if(!doc)return false;
-      doc.open();doc.write(output);doc.close();
-      setTimeout(function(){try{iw.contentWindow.focus();iw.contentWindow.print();}catch(_3){} setTimeout(function(){try{if(iw&&iw.parentNode)iw.parentNode.removeChild(iw);}catch(_4){}},1500);},450);
-      return true;
+      if(!doc)return {ok:false,popupBlocked:popupBlocked,mode:'none'};
+      doc.open();
+      doc.write(output);
+      doc.close();
+      setTimeout(function(){
+        try{iw.contentWindow.focus();iw.contentWindow.print();}catch(_3){}
+        setTimeout(function(){try{if(iw&&iw.parentNode)iw.parentNode.removeChild(iw);}catch(_4){}},2200);
+      },520);
+      return {ok:true,popupBlocked:popupBlocked,mode:'iframe'};
     },
     printStickerSelectionForCT221B:function(){
       var tab='sticker';
       var ids=App.admin._getPrintingSelectedIds(tab);
       if(!ids.length){App.ui.toast('กรุณาเลือกออเดอร์ก่อนพิมพ์','warn');return;}
+      var preWin=null;
+      try{preWin=window.open('','ct221b_sticker_print','width=560,height=760');}catch(_){preWin=null;}
+      if(!preWin){
+        console.log('[sticker-print] popup blocked at open phase');
+        App.ui.toast('Browser บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต popup หรือใช้ browser print fallback','warn');
+      }
       App.admin.mountLegacyPrintBlocks(tab);
       var selected=App.admin._getPrintingSelectedOrders(tab);
-      if(!selected.length){App.ui.toast('ไม่พบรายการที่เลือก','warn');return;}
+      if(!selected.length){
+        App.ui.toast('ไม่พบรายการที่เลือก','warn');
+        try{if(preWin)preWin.close();}catch(_x){}
+        return;
+      }
       var prepareAndPrint=function(rows){
         var valid=(rows||[]).filter(function(o){return !App.admin._isCancelledOrderStatus(o&&o.status);});
-        if(!valid.length){App.ui.toast('ไม่มีรายการที่พิมพ์ได้ (ออเดอร์ยกเลิกทั้งหมด)','warn');return;}
+        if(!valid.length){
+          App.ui.toast('ไม่มีรายการที่พิมพ์ได้ (ออเดอร์ยกเลิกทั้งหมด)','warn');
+          try{if(preWin)preWin.close();}catch(_y){}
+          return;
+        }
         var labels=App.admin._expandOrdersForSticker(valid,'batch');
         console.log('[sticker-print] ids=%d orders=%d labels=%d',ids.length,valid.length,labels.length);
-        if(!labels.length){App.ui.toast('ไม่พบข้อมูลสำหรับพิมพ์สติ๊กเกอร์','warn');return;}
+        if(!labels.length){
+          App.ui.toast('ไม่พบข้อมูลสำหรับพิมพ์สติ๊กเกอร์','warn');
+          try{if(preWin)preWin.close();}catch(_z){}
+          return;
+        }
         var html=App.admin._buildStickerStandaloneHtml(labels,App.admin._getStickerPaperCfg('batch'));
-        var ok=App.admin._openStickerPrintWindow(html);
-        if(!ok){App.ui.toast('Browser บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต popup หรือใช้ browser print fallback','warn');}
+        var result=App.admin._openStickerPrintWindow(html,{win:preWin});
+        if(result&&result.popupBlocked){
+          console.log('[sticker-print] popup blocked, switched to iframe fallback');
+          App.ui.toast('Browser บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต popup หรือใช้ browser print fallback','warn');
+        }
+        if(result&&result.ok&&valid.length){
+          App.admin._markPrintedOrders(valid.map(function(o){return String(o&&o.id||'');}).filter(Boolean),'sticker');
+        }
       };
       var needLoad=selected.filter(function(o){return !(Array.isArray(o&&o.items)&&o.items.length);});
       if(needLoad.length){
@@ -6960,19 +6994,28 @@ var App={
     },
     _getStickerPaperCfg:function(scope){
       var p=(scope==='batch')?'bs':'ss';
-      var num=function(id,def,min,max){
+      var parsePreset=function(txt){
+        var m=String(txt||'').trim().toLowerCase().match(/^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/);
+        if(!m)return {w:50,h:30};
+        var w=parseFloat(m[1]||50),h=parseFloat(m[2]||30);
+        if(!(w>0))w=50;if(!(h>0))h=30;
+        return {w:w,h:h};
+      };
+      var preset=parsePreset(App.admin._resolveStickerSize(p+'-size',p+'-size-custom','50x30'));
+      var readNum=function(id,fallback,min,max){
         var el=document.getElementById(id);
-        var n=parseFloat(el&&el.value||def);
-        if(!isFinite(n)||isNaN(n))n=def;
+        if(!el)return fallback;
+        var n=parseFloat(String(el.value||'').trim());
+        if(!isFinite(n)||isNaN(n))n=fallback;
         if(min!=null&&n<min)n=min;
         if(max!=null&&n>max)n=max;
         return n;
       };
       return {
-        widthMm:num(p+'-width-mm',50,20,120),
-        heightMm:num(p+'-height-mm',30,20,120),
-        marginMm:num(p+'-margin-mm',2,0,10),
-        fontScale:num(p+'-font-scale',1,0.6,2)
+        widthMm:readNum(p+'-width-mm',preset.w,20,120),
+        heightMm:readNum(p+'-height-mm',preset.h,20,120),
+        marginMm:readNum(p+'-margin-mm',2,0,10),
+        fontScale:readNum(p+'-font-scale',1,0.6,2)
       };
     },
     _expandOrdersForSticker:function(orders,scope){
@@ -7940,6 +7983,7 @@ try{
     },0);
   }
 }catch(_){ }
+
 
 
 
