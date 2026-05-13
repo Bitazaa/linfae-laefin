@@ -966,7 +966,7 @@ var App={
       var item=App.state.menu.find(function(m){return String(m.id)===String(menuId);});
       if(!item){App.ui.toast('ไม่พบเมนู','error');return;}
       if(App.customer._isMenuSoldOut(item)){App.ui.toast('เมนูนี้หมดแล้ว','warn');return;}
-      App.state.selectedMenu={item:item,qty:1,selectedChoices:{}};
+      App.state.selectedMenu={item:item,qty:1,selectedChoices:{},comment:''};
       var opts=App.state.options.filter(function(o){
         var mid=String(o&&o.menu_id||'');
         return mid===String(menuId)||mid==='*';
@@ -986,7 +986,7 @@ var App={
       });
       var emoji=item.category==='เครื่องดื่ม'?'🥤':item.category==='อาหาร'?'🍛':'🍱';
       var body=document.getElementById('modal-body');if(!body)return;
-      body.innerHTML=(item.image?'<div class="modal-img-wrap"><img src="'+e(item.image)+'" onerror="this.style.display=\'none\'"></div>':'<div style="font-size:64px;text-align:center;padding:24px;background:var(--surface);">'+emoji+'</div>')+optHtml+'<div class="qty-control mt-3"><button class="qty-btn" onclick="App.customer.changeQty(-1)">−</button><span id="modal-qty" style="font-size:18px;font-weight:700;min-width:28px;text-align:center">1</span><button class="qty-btn" onclick="App.customer.changeQty(1)">+</button><span style="margin-left:auto;font-size:14px;color:var(--text2)">รวม: <strong id="modal-sub">'+App.u.fmt(item.price)+'</strong></span></div>';
+      body.innerHTML=(item.image?'<div class="modal-img-wrap"><img src="'+e(item.image)+'" onerror="this.style.display=\'none\'"></div>':'<div style="font-size:64px;text-align:center;padding:24px;background:var(--surface);">'+emoji+'</div>')+optHtml+'<div class="mt-3"><label class="text-sm" style="display:block;margin-bottom:6px">💬 Comment</label><textarea id="modal-item-comment" class="input" rows="2" maxlength="160" placeholder="เช่น หวานน้อย, ไม่ใส่น้ำแข็ง, แยกน้ำเชื่อม" oninput="App.customer.setModalComment(this.value)"></textarea></div>'+'<div class="qty-control mt-3"><button class="qty-btn" onclick="App.customer.changeQty(-1)">−</button><span id="modal-qty" style="font-size:18px;font-weight:700;min-width:28px;text-align:center">1</span><button class="qty-btn" onclick="App.customer.changeQty(1)">+</button><span style="margin-left:auto;font-size:14px;color:var(--text2)">รวม: <strong id="modal-sub">'+App.u.fmt(item.price)+'</strong></span></div>';
       var tt=document.getElementById('modal-title'),tp=document.getElementById('modal-price');
       if(tt)tt.textContent=item.name;if(tp)tp.textContent=App.u.fmt(item.price);
       document.getElementById('item-modal').classList.add('active');
@@ -1001,6 +1001,7 @@ var App={
     },
     changeQty(d){if(!App.state.selectedMenu)return;App.state.selectedMenu.qty=Math.max(1,Math.min(99,App.state.selectedMenu.qty+d));var el=document.getElementById('modal-qty');if(el)el.textContent=App.state.selectedMenu.qty;App.customer.updateModalSub();},
     updateModalSub(){var s=App.state.selectedMenu;if(!s)return;var p=toNum(s.item.price);Object.values(s.selectedChoices).forEach(function(a){a.forEach(function(c){p+=c.price;});});var el=document.getElementById('modal-sub');if(el)el.textContent=App.u.fmt(p*s.qty);},
+    setModalComment:function(v){if(!App.state.selectedMenu)return;App.state.selectedMenu.comment=String(v||'').replace(/[\u0000-\u001f\u007f]/g,'').trim().substring(0,160);},
     addToCart(){
       if(App.state._shopOpenNow===false){App.ui.toast('ร้านปิดอยู่ ไม่สามารถเพิ่มรายการได้','warn');return;}
       if(App.u.debounce('addcart',600))return;if(!App.state.selectedMenu)return;
@@ -1019,10 +1020,11 @@ var App={
       var price=toNum(s.item.price),flatChoices=[];
       Object.values(s.selectedChoices).forEach(function(a){a.forEach(function(c){price+=c.price;flatChoices.push(c);});});
       price=Math.round(price*100)/100;
-      var optKey=flatChoices.map(function(c){return c.label;}).sort().join(',');
+      var itemComment=String(s.comment||'').trim();
+      var optKey=flatChoices.map(function(c){return c.label;}).sort().join(',')+'|c:'+itemComment;
       var xi=App.state.cart.findIndex(function(ci){return String(ci.menuId)===String(s.item.id)&&ci._optKey===optKey;});
       if(xi>-1)App.state.cart[xi].qty=Math.min(99,App.state.cart[xi].qty+s.qty);
-      else App.state.cart.push({menuId:s.item.id,name:s.item.name,image:s.item.image||'',price:price,options:flatChoices,qty:s.qty,_optKey:optKey});
+      else App.state.cart.push({menuId:s.item.id,name:s.item.name,image:s.item.image||'',price:price,options:flatChoices,comment:itemComment,qty:s.qty,_optKey:optKey});
       App.customer.calcPromo();App.customer.updateBadge();App.customer.saveCartLocal();App.customer.closeModal();
       App.ui.toast(s.item.name+' เพิ่มแล้ว','success');
     },
@@ -1083,7 +1085,7 @@ var App={
       if(!App.customer._isScanEnabled()&&!App.customer._isCashEnabled()){App.ui.toast('ร้านยังไม่ได้เปิดใช้งานวิธีชำระเงิน','error');return;}
       var paymentMethod=App.customer._isCashEnabled()?(App.state._paymentMethod||'scan'):'scan';
       if(paymentMethod==='scan'&&!App.customer._isScanEnabled()){App.ui.toast('ร้านยังไม่ได้เปิดใช้งานวิธีชำระเงิน','error');return;}
-      var payload={customer:name,department:dept,note:note,customerNote:customerNote,customer_note:customerNote,items:App.state.cart.map(function(i){return{menuId:i.menuId,qty:i.qty,selectedChoices:(i.options||[]).map(function(c){return (c&&c.label)?c.label:String(c||'');})};}),paymentMethod:paymentMethod};
+      var payload={customer:name,department:dept,note:note,customerNote:customerNote,customer_note:customerNote,items:App.state.cart.map(function(i){return{menuId:i.menuId,qty:i.qty,selectedChoices:(i.options||[]).map(function(c){return (c&&c.label)?c.label:String(c||'');}).concat(i.comment?['💬 '+i.comment]:[])};}),paymentMethod:paymentMethod};
       App.state._paymentPayload={customer:name,department:dept,note:note,customerNote:customerNote,customer_note:customerNote,cart:JSON.parse(JSON.stringify(App.state.cart)),promo:JSON.parse(JSON.stringify(App.state.promo)),paymentMethod:paymentMethod};
       var btn=document.getElementById('to-payment-btn');App.ui.setBtn(btn,true);
       if(paymentMethod==='cash'){
