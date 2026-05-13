@@ -2867,6 +2867,10 @@ var App={
     },
     directPrintSelection:function(type){
       var tab=(type==='sticker')?'sticker':'receipt';
+      if(tab==='sticker'){
+        App.admin.printStickerSelectionForCT221B();
+        return;
+      }
       var ids=App.admin._getPrintingSelectedIds(tab);
       if(!ids.length){App.ui.toast('กรุณาเลือกออเดอร์ก่อนพิมพ์','warn');return;}
       App.admin._batchForcedOrderIds=ids;
@@ -2874,6 +2878,105 @@ var App={
       App.admin.mountLegacyPrintBlocks(tab);
       App.admin._prepareForcedBatchFilters();
       App.admin.doBatchPrint(false);
+    },
+    _isCancelledOrderStatus:function(status){
+      var s=String(status||'').trim().toLowerCase();
+      return s==='cancelled'||s==='canceled'||s==='cancel'||s==='void'||s==='refunded'||s==='timeout';
+    },
+    _normalizePrintItem:function(item){
+      var it=item&&typeof item==='object'?item:{};
+      var qty=Math.max(1,parseInt(it.qty||it.quantity||1,10)||1);
+      var name=String(it.name||it.menu_name||it.menuName||'').trim();
+      var comment=String(it.item_comment||it.comment||'').replace(/[\x00-\x1F\x7F]/g,' ').trim();
+      var opts=it.options!=null?it.options:(it.selectedChoices!=null?it.selectedChoices:it.choices);
+      var optionText='';
+      if(Array.isArray(opts))optionText=opts.map(function(x){return String((x&&x.label)||x&&x.name||x||'').trim();}).filter(Boolean).join(', ');
+      else optionText=String(opts||'').trim();
+      optionText=optionText.replace(/[\x00-\x1F\x7F]/g,' ').trim();
+      return {name:name,qty:qty,options:optionText,comment:comment};
+    },
+    _buildStickerStandaloneHtml:function(labels,paper){
+      var rows=Array.isArray(labels)?labels:[];
+      var width=Math.max(20,Math.min(120,parseFloat(paper&&paper.widthMm||50)||50));
+      var height=Math.max(20,Math.min(120,parseFloat(paper&&paper.heightMm||30)||30));
+      var margin=Math.max(0,Math.min(10,parseFloat(paper&&paper.marginMm||2)||2));
+      var fontScale=Math.max(0.6,Math.min(2,parseFloat(paper&&paper.fontScale||1)||1));
+      var css='@page{size:'+width+'mm '+height+'mm;margin:0;}html,body{margin:0;padding:0;width:'+width+'mm;background:#fff;color:#000;font-family:Arial,Tahoma,sans-serif}*{box-sizing:border-box}.ct-label{width:'+width+'mm;height:'+height+'mm;padding:'+margin+'mm;overflow:hidden;break-after:page;page-break-after:always;border:0}.ct-last{break-after:auto;page-break-after:auto}.ct-h{font-size:'+Math.round(11*fontScale*10)/10+'px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ct-row{font-size:'+Math.round(8.8*fontScale*10)/10+'px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ct-menu{font-size:'+Math.round(10.5*fontScale*10)/10+'px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ct-note{font-size:'+Math.round(8*fontScale*10)/10+'px;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.ct-sep{border-top:1px solid #000;margin:1mm 0}.ct-cash{font-size:'+Math.round(9.2*fontScale*10)/10+'px;font-weight:700}';
+      var body='';
+      rows.forEach(function(o,idx){
+        var cls='ct-label'+(idx===rows.length-1?' ct-last':'');
+        var customer=App.u.esc(String(o&&o.customer||'-'));
+        var dept=App.u.esc(String(o&&o.department||''));
+        var note=App.u.esc(String(o&&o.note||''));
+        var cnote=App.u.esc(String(o&&o.customer_note||o&&o.customerNote||''));
+        var pm=String(o&&o.payment_method||'').toLowerCase()==='cash'?'เก็บเงินปลายทาง':'สแกนจ่าย';
+        var pmHtml=(pm==='เก็บเงินปลายทาง')?'<div class="ct-row ct-cash">'+pm+'</div>':'<div class="ct-row">'+pm+'</div>';
+        var created=App.u.esc(App.admin._formatPrintDateTime(o&&o.created_at||''));
+        var items=Array.isArray(o&&o.items)?o.items:[];
+        var first=App.admin._normalizePrintItem(items[0]||{});
+        if(o&&o.__stickerItemMode){
+          body+='<section class="'+cls+'"><div class="ct-h">#'+App.u.esc(String(o&&o.id||''))+'</div><div class="ct-row">'+customer+(dept?(' | '+dept):'')+'</div>'+pmHtml+'<div class="ct-sep"></div><div class="ct-menu">'+App.u.esc(first.name||'-')+(first.qty>1?(' x'+first.qty):'')+'</div>';
+          if(first.options)body+='<div class="ct-note">ตัวเลือก: '+App.u.esc(first.options)+'</div>';
+          if(first.comment)body+='<div class="ct-note">หมายเหตุเมนู: '+App.u.esc(first.comment)+'</div>';
+          if(cnote)body+='<div class="ct-note">หมายเหตุลูกค้า: '+cnote+'</div>';
+          if(note)body+='<div class="ct-note">'+note+'</div>';
+          body+='</section>';
+        }else{
+          body+='<section class="'+cls+'"><div class="ct-h">#'+App.u.esc(String(o&&o.id||''))+' '+customer+'</div><div class="ct-row">'+(dept||'-')+'</div><div class="ct-row">'+created+'</div>'+pmHtml+'<div class="ct-sep"></div>';
+          var shown=0;
+          items.forEach(function(it){if(shown>=4)return;var n=App.admin._normalizePrintItem(it);if(!n.name)return;body+='<div class="ct-row">- '+App.u.esc(n.name)+(n.qty>1?(' x'+n.qty):'')+'</div>';shown++;});
+          body+='<div class="ct-sep"></div><div class="ct-row">ยอดรวม ฿'+Math.round(parseFloat(o&&o.total||0)||0).toLocaleString('th-TH')+'</div></section>';
+        }
+      });
+      return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sticker Print</title><style>'+css+'</style></head><body>'+body+'</body></html>';
+    },
+    _openStickerPrintWindow:function(html){
+      var output=String(html||'').trim();
+      if(!output)return false;
+      var w=null;
+      try{w=window.open('','_blank','noopener,noreferrer,width=560,height=760');}catch(_){w=null;}
+      if(w&&w.document){
+        try{
+          w.document.open();
+          w.document.write(output);
+          w.document.close();
+          setTimeout(function(){try{w.focus();w.print();}catch(_e){}},450);
+          return true;
+        }catch(_2){}
+      }
+      var iw=document.createElement('iframe');
+      iw.style.cssText='position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:0;opacity:0';
+      document.body.appendChild(iw);
+      var doc=iw.contentWindow&&iw.contentWindow.document;
+      if(!doc)return false;
+      doc.open();doc.write(output);doc.close();
+      setTimeout(function(){try{iw.contentWindow.focus();iw.contentWindow.print();}catch(_3){} setTimeout(function(){try{if(iw&&iw.parentNode)iw.parentNode.removeChild(iw);}catch(_4){}},1500);},450);
+      return true;
+    },
+    printStickerSelectionForCT221B:function(){
+      var tab='sticker';
+      var ids=App.admin._getPrintingSelectedIds(tab);
+      if(!ids.length){App.ui.toast('กรุณาเลือกออเดอร์ก่อนพิมพ์','warn');return;}
+      App.admin.mountLegacyPrintBlocks(tab);
+      var selected=App.admin._getPrintingSelectedOrders(tab);
+      if(!selected.length){App.ui.toast('ไม่พบรายการที่เลือก','warn');return;}
+      var prepareAndPrint=function(rows){
+        var valid=(rows||[]).filter(function(o){return !App.admin._isCancelledOrderStatus(o&&o.status);});
+        if(!valid.length){App.ui.toast('ไม่มีรายการที่พิมพ์ได้ (ออเดอร์ยกเลิกทั้งหมด)','warn');return;}
+        var labels=App.admin._expandOrdersForSticker(valid,'batch');
+        console.log('[sticker-print] ids=%d orders=%d labels=%d',ids.length,valid.length,labels.length);
+        if(!labels.length){App.ui.toast('ไม่พบข้อมูลสำหรับพิมพ์สติ๊กเกอร์','warn');return;}
+        var html=App.admin._buildStickerStandaloneHtml(labels,App.admin._getStickerPaperCfg('batch'));
+        var ok=App.admin._openStickerPrintWindow(html);
+        if(!ok){App.ui.toast('Browser บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต popup หรือใช้ browser print fallback','warn');}
+      };
+      var needLoad=selected.filter(function(o){return !(Array.isArray(o&&o.items)&&o.items.length);});
+      if(needLoad.length){
+        App.ui.toast('กำลังโหลดข้อมูลรายการอาหารก่อนพิมพ์...','info');
+        App.admin._ensureOrdersItemsLoaded(selected,function(full){prepareAndPrint(full||selected);});
+        return;
+      }
+      prepareAndPrint(selected);
     },
     downloadPrintingSelectionPdf:function(type){
       var tab=(type==='sticker')?'sticker':'receipt';
@@ -7837,4 +7940,18 @@ try{
     },0);
   }
 }catch(_){ }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
