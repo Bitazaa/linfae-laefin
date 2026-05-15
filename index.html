@@ -323,6 +323,7 @@
                   <div style="display:flex;gap:8px">
                     <button class="printdash-btn printdash-btn-primary printdash-btn-print" type="button" onclick="App.admin.directPrintSelection('sticker')">พิมพ์สติ๊กเกอร์</button>
                     <button class="printdash-btn printdash-btn-secondary" type="button" onclick="App.admin.downloadPrintingSelectionPdf('sticker')">ดาวน์โหลดไฟล์สติ๊กเกอร์</button>
+                    <button class="printdash-btn printdash-btn-secondary" type="button" onclick="App.admin.exportStickerImagesForClabelTrade({source:'dashboard', splitByOrder:true})">บันทึก PNG แยกตามออเดอร์</button>
                     <button class="printdash-btn printdash-btn-secondary" type="button" onclick="App.admin.resetPrintingStatus('sticker')">ล้างสถานะพิมพ์แล้ว</button>
                   </div>
                 </div>
@@ -1782,10 +1783,11 @@
       <p class="text-sm text-muted" style="line-height:1.6">iPhone/iPad พิมพ์จาก Safari ได้เฉพาะเครื่องที่รองรับ AirPrint หากไม่พบ CLabel CT221B ให้ดาวน์โหลดไฟล์สติ๊กเกอร์ แล้วเปิดพิมพ์ผ่านแอป/ไดรเวอร์ของเครื่อง หรือส่งไฟล์ไปยังคอมพิวเตอร์ที่ต่อเครื่องพิมพ์</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
         <button class="btn btn-primary" type="button" onclick="App.admin.downloadStickerPdfForSelectedOrders()">ดาวน์โหลดไฟล์สติ๊กเกอร์</button>
+        <button class="btn btn-secondary" type="button" onclick="App.admin.exportStickerImagesForClabelTrade({source:'mobile', splitByOrder:true})">บันทึก PNG เพื่อเปิดใน CLabel trade</button>
         <button class="btn btn-secondary" type="button" onclick="App.admin.tryDirectStickerPrintFromGuide()">ลองพิมพ์ผ่าน AirPrint</button>
         <button class="btn btn-ghost" type="button" onclick="document.getElementById('mobile-sticker-guide-modal').classList.remove('active')">ปิด</button>
       </div>
-      <p class="text-xs text-muted" style="margin-top:10px">ปุ่ม AirPrint ใช้ได้เฉพาะกรณี iPhone มองเห็นเครื่องพิมพ์ผ่าน AirPrint เท่านั้น</p>
+      <p class="text-xs text-muted" style="margin-top:10px">ถ้าเลือกหลายออเดอร์ ระบบจะบันทึกไฟล์แยกตามออเดอร์ เพื่อให้นำไปเปิดในแอป CLabel trade แล้วปริ้นผ่าน Bluetooth ทีละออเดอร์ได้ตรงกับสติ๊กเกอร์<br>เว็บจะไม่เชื่อมต่อ Bluetooth โดยตรง ให้เปิดไฟล์ PNG/PDF ในแอป CLabel trade เพื่อสั่งพิมพ์</p>
     </div>
   </div>
 </div>
@@ -1808,9 +1810,11 @@
 })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="app.js?v=ct221b-label-20260514"></script>
+<script src="app.js?v=ct221b-label-20260514-clabel1"></script>
 </body>
 </html>
+
+
 
 
 
