@@ -2666,7 +2666,24 @@ var App={
       }
     },
 
-    openMobileStickerPrintFallbackFromBatch:function(){
+
+    _showMobileStickerGuide:function(){
+      var m=document.getElementById('mobile-sticker-guide-modal');
+      if(!m){
+        App.ui.toast('ไม่พบหน้าต่างแนะนำสติ๊กเกอร์','warn');
+        return;
+      }
+      m.classList.add('active');
+      m.setAttribute('aria-hidden','false');
+    },
+
+    _hideMobileStickerGuide:function(){
+      var m=document.getElementById('mobile-sticker-guide-modal');
+      if(m){
+        m.classList.remove('active');
+        m.setAttribute('aria-hidden','true');
+      }
+    },    openMobileStickerPrintFallbackFromBatch:function(){
       var orders=[];
       try{
         orders=App.admin._getBatchOrders?App.admin._getBatchOrders():[];
@@ -2701,9 +2718,8 @@ var App={
         return;
       }
 
-      var modal=document.getElementById('mobile-sticker-guide-modal');
-      if(modal){
-        modal.classList.add('active');
+      if(App.admin._showMobileStickerGuide){
+        App.admin._showMobileStickerGuide();
         return;
       }
 
@@ -2719,9 +2735,8 @@ var App={
       }else{
         App.admin._mobileStickerSource='selection';
       }
-      var modal=document.getElementById('mobile-sticker-guide-modal');
-      if(modal){
-        modal.classList.add('active');
+      if(App.admin._showMobileStickerGuide){
+        App.admin._showMobileStickerGuide();
         return;
       }
       App.ui.toast('บนมือถือให้ใช้ดาวน์โหลดไฟล์สติ๊กเกอร์','warn');
@@ -8074,5 +8089,6 @@ try{
     },0);
   }
 }catch(_){ }
+
 
 
