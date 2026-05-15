@@ -2197,6 +2197,304 @@ var App={
       return labels;
     },
 
+    _groupStickerLabelsByOrder:function(labels){
+      var list=Array.isArray(labels)?labels:[];
+      var groups=[];
+      var map={};
+
+      var safeId=function(v){
+        var s=String(v||'').trim();
+        return s || '';
+      };
+
+      list.forEach(function(label,idx){
+        var order=label&&label.order?label.order:{};
+        var rawId=safeId(order.id||order.orderId||order.order_id||label.orderId||label.order_id);
+        var key=rawId || ('NO_ORDER_ID_'+idx);
+
+        if(!map[key]){
+          map[key]={
+            orderId:rawId || key,
+            order:order,
+            labels:[]
+          };
+          groups.push(map[key]);
+        }
+
+        map[key].labels.push(label);
+      });
+
+      return groups;
+    },
+
+    _resolveStickerExportOrders:function(options,done){
+      options=options||{};
+      var source=String(options.source||'dashboard');
+      var scope=options.scope||(source==='single'?'single':'batch');
+      var orders=[];
+
+      try{
+        if(source==='batch'){
+          orders=App.admin._getBatchOrders?App.admin._getBatchOrders():[];
+        }else if(source==='mobile'){
+          if(App.admin._mobileStickerSource==='batch'&&Array.isArray(App.admin._mobileBatchStickerOrders)&&App.admin._mobileBatchStickerOrders.length){
+            orders=App.admin._mobileBatchStickerOrders;
+            source='batch';
+          }else{
+            orders=App.admin._getPrintingSelectedOrders?App.admin._getPrintingSelectedOrders('sticker'):[];
+          }
+        }else if(source==='single'){
+          var idx=App.admin._printOrderIdx;
+          var list=(App.state&&Array.isArray(App.state.adminOrders))?App.state.adminOrders:(Array.isArray(App.admin._ordersData)?App.admin._ordersData:[]);
+          var one=(idx!=null&&idx>=0)?list[idx]:null;
+          orders=one?[one]:[];
+        }else{
+          orders=App.admin._getPrintingSelectedOrders?App.admin._getPrintingSelectedOrders('sticker'):[];
+        }
+      }catch(e){
+        console.warn('[clabel-export] resolve source failed',e);
+        orders=[];
+      }
+
+      var finish=function(fullOrders){
+        var list=Array.isArray(fullOrders)&&fullOrders.length?fullOrders:orders;
+
+        var valid=list.filter(function(o){
+          return o&&!App.admin._isCancelledOrderStatus(String(o.status||''));
+        });
+
+        var labels=App.admin._expandOrdersForSticker(valid,scope);
+        var groups=App.admin._groupStickerLabelsByOrder(labels);
+
+        console.log('[clabel-export]',{
+          source:source,
+          scope:scope,
+          orders:valid.length,
+          labels:labels.length,
+          groups:groups.length
+        });
+
+        if(!valid.length||!labels.length||!groups.length){
+          App.ui.toast('ไม่พบข้อมูลสติ๊กเกอร์สำหรับบันทึกไฟล์','warn');
+          if(typeof done==='function')done(null);
+          return;
+        }
+
+        if(typeof done==='function'){
+          done({
+            source:source,
+            scope:scope,
+            orders:valid,
+            labels:labels,
+            groups:groups,
+            paper:App.admin._getStickerPaperCfg(scope)
+          });
+        }
+      };
+
+      if(orders.length&&App.admin._ensureOrdersItemsLoaded){
+        App.admin._ensureOrdersItemsLoaded(orders,function(full){
+          finish(Array.isArray(full)&&full.length?full:orders);
+        });
+      }else{
+        finish(orders);
+      }
+    },
+
+    exportStickerImagesForClabelTrade:function(options){
+      options=options||{};
+      options.splitByOrder = options.splitByOrder !== false;
+
+      App.admin._resolveStickerExportOrders(options,function(result){
+        if(!result){
+          return;
+        }
+
+        var groups = options.splitByOrder ? result.groups : [{
+          orderId:'ALL_ORDERS',
+          order:null,
+          labels:result.labels
+        }];
+
+        if(!groups.length){
+          App.ui.toast('ไม่พบข้อมูลสติ๊กเกอร์สำหรับบันทึกไฟล์','warn');
+          return;
+        }
+
+        console.log('[clabel-export-png]',{
+          source:result.source,
+          scope:result.scope,
+          groups:groups.length,
+          labels:result.labels.length,
+          splitByOrder:options.splitByOrder
+        });
+
+        App.admin._exportStickerGroupsAsPng(groups,result.paper,options);
+      });
+    },
+
+    _sanitizeClabelFilename:function(value){
+      var s=String(value||'').trim();
+      s=s.replace(/[\/\\:*?"<>|]/g,'_');
+      s=s.replace(/\s+/g,'_');
+      s=s.replace(/_+/g,'_');
+      s=s.substring(0,80);
+      return s || 'ORDER';
+    },
+
+    _exportStickerGroupsAsPng:function(groups,paper,options){
+      options=options||{};
+      paper=paper||App.admin._getStickerPaperCfg('batch');
+
+      if(typeof html2canvas==='undefined'){
+        App.ui.toast('ไม่พบ html2canvas สำหรับสร้าง PNG กรุณาลองดาวน์โหลด PDF แทน','warn');
+        return;
+      }
+
+      var allTasks=[];
+      groups.forEach(function(group){
+        var orderId=App.admin._sanitizeClabelFilename(group.orderId||'ORDER');
+        (group.labels||[]).forEach(function(label,idx){
+          allTasks.push({
+            group:group,
+            label:label,
+            orderId:orderId,
+            index:idx+1,
+            total:(group.labels||[]).length
+          });
+        });
+      });
+
+      if(!allTasks.length){
+        App.ui.toast('ไม่พบ label สำหรับบันทึกไฟล์','warn');
+        return;
+      }
+
+      var root=document.createElement('div');
+      root.style.cssText='position:fixed;left:-99999px;top:0;background:#fff;z-index:-1;opacity:0;pointer-events:none;';
+      document.body.appendChild(root);
+
+      var scale=Math.max(2,Math.min(4,parseFloat(options.scale||3)||3));
+      var widthMm=parseFloat(paper.widthMm||50)||50;
+      var heightMm=parseFloat(paper.heightMm||30)||30;
+
+      var mmToPx=function(mm){
+        return Math.round((parseFloat(mm)||0)*96/25.4);
+      };
+
+      var renderOne=function(task,done){
+        try{
+          var html=App.admin._buildStickerStandaloneHtml([task.label],paper);
+          var doc=document.implementation.createHTMLDocument('label');
+          doc.open();
+          doc.write(html);
+          doc.close();
+
+          var labelNode=doc.body.querySelector('.ct-label') || doc.body.firstElementChild;
+          if(!labelNode){
+            done(null);
+            return;
+          }
+
+          var wrap=document.createElement('div');
+          wrap.style.cssText='width:'+mmToPx(widthMm)+'px;height:'+mmToPx(heightMm)+'px;background:#fff;overflow:hidden;';
+          wrap.innerHTML=labelNode.outerHTML;
+          root.appendChild(wrap);
+
+          html2canvas(wrap,{
+            backgroundColor:'#ffffff',
+            scale:scale,
+            useCORS:true,
+            logging:false,
+            width:mmToPx(widthMm),
+            height:mmToPx(heightMm),
+            windowWidth:mmToPx(widthMm),
+            windowHeight:mmToPx(heightMm)
+          }).then(function(canvas){
+            try{
+              canvas.toBlob(function(blob){
+                try{root.removeChild(wrap);}catch(_){ }
+                done(blob||null);
+              },'image/png');
+            }catch(e){
+              try{root.removeChild(wrap);}catch(_){ }
+              console.warn('[clabel-export-png] toBlob failed',e);
+              done(null);
+            }
+          }).catch(function(e){
+            try{root.removeChild(wrap);}catch(_){ }
+            console.warn('[clabel-export-png] html2canvas failed',e);
+            done(null);
+          });
+        }catch(e){
+          console.warn('[clabel-export-png] render failed',e);
+          done(null);
+        }
+      };
+
+      var i=0,success=0;
+      var next=function(){
+        if(i>=allTasks.length){
+          try{if(root&&root.parentNode)root.parentNode.removeChild(root);}catch(_){ }
+          if(success>0){
+            App.ui.toast('บันทึกไฟล์สติ๊กเกอร์แล้ว ให้นำไปเปิดในแอป CLabel trade','success');
+          }else{
+            App.ui.toast('ไม่สามารถบันทึก PNG ได้ กรุณาลองดาวน์โหลด PDF แทน','warn');
+          }
+          return;
+        }
+
+        var task=allTasks[i++];
+        renderOne(task,function(blob){
+          if(blob){
+            success++;
+            var filename='clabel_'+task.orderId+'_'+String(task.index).padStart(2,'0')+'.png';
+            App.admin._shareOrDownloadClabelFile(blob,filename);
+          }
+          setTimeout(next,350);
+        });
+      };
+
+      next();
+    },
+
+    _shareOrDownloadClabelFile:function(blob,filename){
+      filename=filename||'clabel_sticker.png';
+      try{
+        var file=new File([blob],filename,{type:'image/png'});
+        if(navigator.canShare&&navigator.canShare({files:[file]})&&navigator.share){
+          navigator.share({
+            files:[file],
+            title:'CLabel sticker',
+            text:'เปิดไฟล์นี้ในแอป CLabel trade เพื่อพิมพ์ผ่าน Bluetooth'
+          }).catch(function(){
+            App.admin._downloadBlobFile(blob,filename);
+          });
+          return;
+        }
+      }catch(_){ }
+
+      App.admin._downloadBlobFile(blob,filename);
+    },
+
+    _downloadBlobFile:function(blob,filename){
+      try{
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a');
+        a.href=url;
+        a.download=filename||'clabel_sticker.png';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function(){
+          try{document.body.removeChild(a);}catch(_){ }
+          try{URL.revokeObjectURL(url);}catch(_){ }
+        },1200);
+      }catch(e){
+        console.warn('[clabel-export-png] download failed',e);
+        App.ui.toast('ไม่สามารถดาวน์โหลดไฟล์ได้ กรุณาลอง PDF แทน','warn');
+      }
+    },
+
     printStickerSelectionForCT221B:function(){
       var ids=[];
       try{
