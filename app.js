@@ -4156,7 +4156,7 @@ var App={
       byTs.forEach(function(o){
         var s=String(o&&o.status||'').toLowerCase();
         var isDone=(s==='done'||s==='completed'||s==='delivered');
-        var isCancel=(s==='cancelled');
+        var isCancel=App.admin._isCancelledOrderStatus(s);
         var isNew=(App.admin._statusUi(s).accept||s==='pending'||s==='paid');
         if(isCancel)statusCount.cancelled++;
         else if(isNew)statusCount.newOrder++;
@@ -4172,6 +4172,7 @@ var App={
       if(!topRaw.length){
         var menuCnt={};
         byTs.forEach(function(o){
+          if(App.admin._isCancelledOrderStatus(o&&o.status))return;
           (o.items||[]).forEach(function(it){
             var k=String(it&&it.name||'').trim();if(!k)return;
             menuCnt[k]=(menuCnt[k]||0)+safeInt(it&&it.qty||1);
@@ -4193,7 +4194,7 @@ var App={
           var dtt=new Date(o.__ts);dtt.setHours(0,0,0,0);
           var key=dtt.getFullYear()+'-'+(dtt.getMonth()+1)+'-'+dtt.getDate();
           if(!bins[key])return;
-          if(String(o.status||'').toLowerCase()==='cancelled')return;
+          if(App.admin._isCancelledOrderStatus(o&&o.status))return;
           bins[key].revenue+=safeNum(o.total||0);
         });
         chart=labels.map(function(k){return bins[k];});
@@ -6435,7 +6436,7 @@ var App={
       if(lu)lu.textContent='อัปเดตล่าสุด: '+new Date().toLocaleTimeString('th-TH');
       var view=App.admin._getOrdersView({source:allData,ignoreDept:false});
       var orders=view.dateFiltered||[];
-      var nonCancelledOrders=orders.filter(function(o){return String(o&&o.status||'').trim().toLowerCase()!=='cancelled';});
+      var nonCancelledOrders=orders.filter(function(o){return !App.admin._isCancelledOrderStatus(o&&o.status);});
       App.admin._updateAcceptAllBtnLabel();
 
       // สร้าง dept chips จากข้อมูลจริง
@@ -6460,7 +6461,7 @@ var App={
         var ps=String(o&&o.payment_status||'').trim().toLowerCase();
         var isCash=(m==='cash'||m==='cod'||m==='ปลายทาง'||mRaw.indexOf('เก็บเงินปลายทาง')>-1);
         var isPaid=(ps==='cash'||ps==='paid'||ps==='completed');
-        return isCash&&!isPaid&&st!=='cancelled';
+        return isCash&&!isPaid&&!App.admin._isCancelledOrderStatus(st);
       };
       var pendingCashFiltered=nonCancelledOrders.filter(isCashPending);
       var pendingCashFilteredAmount=pendingCashFiltered.reduce(function(s,o){return s+parseFloat(o&&o.total||0);},0);
@@ -6540,6 +6541,7 @@ var App={
         }
         src.forEach(function(o){
           if(String(o.status||'')==='pending')return;
+          if(App.admin._isCancelledOrderStatus(o&&o.status))return;
           var ts=o.__ts||0;if(!ts)return;
           var t=new Date(ts);
           t.setHours(0,0,0,0);
@@ -6579,6 +6581,7 @@ var App={
       // อันดับเมนู — นับจาก orders ทั้งหมด
       var menuCount={};
       orders.forEach(function(o){
+        if(App.admin._isCancelledOrderStatus(o&&o.status))return;
         (o.items||[]).forEach(function(it){
           var n=String(it.name||'').trim();if(!n)return;
           menuCount[n]=(menuCount[n]||0)+parseInt(it.qty||1);
@@ -8089,6 +8092,7 @@ try{
     },0);
   }
 }catch(_){ }
+
 
 
 
