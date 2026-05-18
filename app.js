@@ -1965,8 +1965,63 @@ var App={
       if(ori==='landscape')return h+'mm '+w+'mm';
       return w+'mm '+h+'mm';
     },
+    _normalizeStickerLabel:function(label){
+      label=label||{};
+      var order=label.order||label.rawOrder||label||{};
+      var item=label.item||label.rawItem||null;
+      var pick=function(obj,keys,fallback){
+        obj=obj||{};
+        for(var i=0;i<keys.length;i++){
+          var k=keys[i];
+          if(obj[k]!==undefined&&obj[k]!==null&&String(obj[k]).trim()!==''){
+            return obj[k];
+          }
+        }
+        return fallback;
+      };
+      var qtyRaw=label.qty;
+      if(qtyRaw===undefined||qtyRaw===null||qtyRaw===''){
+        qtyRaw=item?pick(item,['qty','quantity','count'],1):1;
+      }
+      var qty=parseInt(qtyRaw,10);
+      if(isNaN(qty)||qty<1)qty=1;
+      var orderId=pick(order,['id','orderId','order_id','orderNo','order_no','code'],'');
+      var customer=pick(order,['customer_name','customerName','customer','name','buyer_name'],'');
+      var department=pick(order,['department','dept','company','village','address','delivery_address'],'');
+      var note=pick(order,['customer_note','note','remark','remarks','comment'],'');
+      var paymentMethod=pick(order,['payment_method','paymentMethod','payment','pay_method'],'');
+      var total=pick(order,['total','total_amount','grand_total','amount','net_total'],0);
+      var status=pick(order,['status','order_status'],'');
+      var itemName=item?pick(item,['name','menu_name','menuName','title','item_name','product_name'],''):'';
+      var options=item?pick(item,['options','selectedChoices','selected_choices','choices','toppings','option_text'],''):'';
+      var comment=item?pick(item,['item_comment','comment','note','remark','remarks'],''):'';
+      var itemList=label.items||order.items||order.order_items||order.orderItems||[];
+      return {
+        type:label.type||(item?'item':'order'),
+        orderId:orderId,
+        customer:customer,
+        department:department,
+        note:note,
+        paymentMethod:paymentMethod,
+        total:total,
+        status:status,
+        itemName:itemName,
+        qty:qty,
+        options:options,
+        comment:comment,
+        copyIndex:parseInt(label.copyIndex,10)||1,
+        copyTotal:parseInt(label.copyTotal,10)||1,
+        originalQty:parseInt(label.originalQty,10)||qty,
+        order:order,
+        item:item,
+        items:Array.isArray(itemList)?itemList:[]
+      };
+    },
     _buildStickerStandaloneHtml:function(labels,paper){
       var rows=Array.isArray(labels)?labels:[];
+      var normalized=rows.map(function(row){
+        return App.admin._normalizeStickerLabel?App.admin._normalizeStickerLabel(row):(row||{});
+      });
       var width=Math.max(20,Math.min(120,parseFloat((paper&&paper.widthMm)||50)||50));
       var height=Math.max(20,Math.min(120,parseFloat((paper&&paper.heightMm)||30)||30));
       var margin=Math.max(0,Math.min(10,parseFloat((paper&&paper.marginMm)||2)||2));
@@ -1983,37 +2038,49 @@ var App={
         +'.ct-sep{border-top:1px solid #000;margin:1mm 0;}'
         +'.ct-cash{font-weight:700;}';
       var body='';
-      rows.forEach(function(row,idx){
-        var o=row||{};
-        var cls='ct-label'+(idx===rows.length-1?' ct-last':'');
-        var orderId=App.u.esc(String(o.orderId||o.id||''));
+      normalized.forEach(function(o,idx){
+        o=o||{};
+        var cls='ct-label'+(idx===normalized.length-1?' ct-last':'');
+        var orderId=App.u.esc(String(o.orderId||'-'));
         var customer=App.u.esc(String(o.customer||'-'));
-        var dept=App.u.esc(String(o.department||o.address||''));
+        var dept=App.u.esc(String(o.department||''));
         var note=App.u.esc(String(o.note||''));
-        var cNote=App.u.esc(String(o.customer_note||o.customerNote||''));
-        var payment=String(o.payment_method||'').toLowerCase()==='cash'?'เก็บเงินปลายทาง':'สแกนจ่าย';
+        var paymentRaw=String(o.paymentMethod||'').trim();
+        var paymentKey=paymentRaw.toLowerCase();
+        var isCash=(paymentKey==='cash'||paymentKey==='cod'||paymentKey.indexOf('เงินสด')>-1);
+        var payment=isCash?'เก็บเงินปลายทาง':(paymentRaw||'สแกนจ่าย');
         var status=App.u.esc(String(o.status||''));
         var totalRaw=parseFloat(o.total||0); if(!isFinite(totalRaw))totalRaw=0;
         var total='฿'+Math.round(totalRaw).toLocaleString('th-TH');
         var items=Array.isArray(o.items)?o.items:[];
+        var itemName=App.u.esc(String(o.itemName||''));
+        var itemQty=Math.max(1,parseInt(o.qty||1,10)||1);
+        var options=App.u.esc(String(o.options||'').replace(/[\x00-\x1F\x7F]/g,' ').trim());
+        var comment=App.u.esc(String(o.comment||'').replace(/[\x00-\x1F\x7F]/g,' ').trim());
+        var copyTotal=Math.max(1,parseInt(o.copyTotal||1,10)||1);
+        var copyIndex=Math.max(1,parseInt(o.copyIndex||1,10)||1);
         body+='<section class="'+cls+'">';
         body+='<div class="ct-h">#'+orderId+' '+customer+'</div>';
         if(dept)body+='<div class="ct-row">'+dept+'</div>';
-        body+='<div class="ct-row '+(payment==='เก็บเงินปลายทาง'?'ct-cash':'')+'">'+App.u.esc(payment)+'</div>';
+        body+='<div class="ct-row '+(isCash?'ct-cash':'')+'">'+App.u.esc(payment)+'</div>';
         if(status)body+='<div class="ct-row">สถานะ: '+status+'</div>';
         body+='<div class="ct-sep"></div>';
-        if(items.length){
+        if(String(o.type||'')==='item'){
+          if(itemName)body+='<div class="ct-menu">'+itemName+(itemQty>1?(' x'+itemQty):'')+'</div>';
+          if(copyTotal>1)body+='<div class="ct-note">ดวง '+copyIndex+'/'+copyTotal+'</div>';
+          if(options)body+='<div class="ct-note">ตัวเลือก: '+options+'</div>';
+          if(comment)body+='<div class="ct-note">หมายเหตุเมนู: '+comment+'</div>';
+        }else if(items.length){
           items.slice(0,4).forEach(function(it){
-            var name=App.u.esc(String(it&&((it.menu_name||it.name)||'')||''));
-            var qty=Math.max(1,parseInt(it&&(it.qty||it.quantity)||1,10)||1);
-            var options=App.u.esc(String(it&&(it.options||it.selectedChoices||it.choices)||'').replace(/[\x00-\x1F\x7F]/g,' ').trim());
-            var comment=App.u.esc(String(it&&(it.item_comment||it.comment)||'').replace(/[\x00-\x1F\x7F]/g,' ').trim());
+            var name=App.u.esc(String(it&&((it.menu_name||it.name||it.menuName||it.item_name)||'')||''));
+            var qty=Math.max(1,parseInt(it&&(it.qty||it.quantity||it.count)||1,10)||1);
+            var itOptions=App.u.esc(String(it&&(it.options||it.selectedChoices||it.selected_choices||it.choices||it.toppings)||'').replace(/[\x00-\x1F\x7F]/g,' ').trim());
+            var itComment=App.u.esc(String(it&&(it.item_comment||it.comment||it.note)||'').replace(/[\x00-\x1F\x7F]/g,' ').trim());
             if(name)body+='<div class="ct-menu">'+name+(qty>1?(' x'+qty):'')+'</div>';
-            if(options)body+='<div class="ct-note">ตัวเลือก: '+options+'</div>';
-            if(comment)body+='<div class="ct-note">หมายเหตุเมนู: '+comment+'</div>';
+            if(itOptions)body+='<div class="ct-note">ตัวเลือก: '+itOptions+'</div>';
+            if(itComment)body+='<div class="ct-note">หมายเหตุเมนู: '+itComment+'</div>';
           });
         }
-        if(cNote)body+='<div class="ct-note">หมายเหตุลูกค้า: '+cNote+'</div>';
         if(note)body+='<div class="ct-note">'+note+'</div>';
         body+='<div class="ct-sep"></div><div class="ct-row">รวม '+App.u.esc(total)+'</div>';
         body+='</section>';
@@ -2383,50 +2450,64 @@ var App={
       };
 
       var renderOne=function(task,done){
+        var iframe=null;
+        var cleanup=function(){
+          try{ if(iframe&&iframe.parentNode)iframe.parentNode.removeChild(iframe); }catch(_){ }
+        };
         try{
           var html=App.admin._buildStickerStandaloneHtml([task.label],paper);
-          var doc=document.implementation.createHTMLDocument('label');
+          iframe=document.createElement('iframe');
+          iframe.style.cssText='position:fixed;left:-99999px;top:0;width:'+mmToPx(widthMm)+'px;height:'+mmToPx(heightMm)+'px;border:0;opacity:0;pointer-events:none;background:#fff;';
+          document.body.appendChild(iframe);
+
+          var doc=iframe.contentDocument||(iframe.contentWindow&&iframe.contentWindow.document);
+          if(!doc){ cleanup(); done(null); return; }
           doc.open();
           doc.write(html);
           doc.close();
 
-          var labelNode=doc.body.querySelector('.ct-label') || doc.body.firstElementChild;
-          if(!labelNode){
-            done(null);
-            return;
-          }
-
-          var wrap=document.createElement('div');
-          wrap.style.cssText='width:'+mmToPx(widthMm)+'px;height:'+mmToPx(heightMm)+'px;background:#fff;overflow:hidden;';
-          wrap.innerHTML=labelNode.outerHTML;
-          root.appendChild(wrap);
-
-          html2canvas(wrap,{
-            backgroundColor:'#ffffff',
-            scale:scale,
-            useCORS:true,
-            logging:false,
-            width:mmToPx(widthMm),
-            height:mmToPx(heightMm),
-            windowWidth:mmToPx(widthMm),
-            windowHeight:mmToPx(heightMm)
-          }).then(function(canvas){
+          setTimeout(function(){
             try{
-              canvas.toBlob(function(blob){
-                try{root.removeChild(wrap);}catch(_){ }
-                done(blob||null);
-              },'image/png');
+              var labelNode=doc.querySelector('.ct-label') || (doc.body&&doc.body.firstElementChild);
+              if(!labelNode){
+                cleanup();
+                done(null);
+                return;
+              }
+
+              html2canvas(labelNode,{
+                backgroundColor:'#ffffff',
+                scale:scale,
+                useCORS:true,
+                logging:false,
+                width:mmToPx(widthMm),
+                height:mmToPx(heightMm),
+                windowWidth:mmToPx(widthMm),
+                windowHeight:mmToPx(heightMm)
+              }).then(function(canvas){
+                try{
+                  canvas.toBlob(function(blob){
+                    cleanup();
+                    done(blob||null);
+                  },'image/png');
+                }catch(e){
+                  cleanup();
+                  console.warn('[clabel-export-png] toBlob failed',e);
+                  done(null);
+                }
+              }).catch(function(e){
+                cleanup();
+                console.warn('[clabel-export-png] html2canvas failed',e);
+                done(null);
+              });
             }catch(e){
-              try{root.removeChild(wrap);}catch(_){ }
-              console.warn('[clabel-export-png] toBlob failed',e);
+              cleanup();
+              console.warn('[clabel-export-png] render failed',e);
               done(null);
             }
-          }).catch(function(e){
-            try{root.removeChild(wrap);}catch(_){ }
-            console.warn('[clabel-export-png] html2canvas failed',e);
-            done(null);
-          });
+          },220);
         }catch(e){
+          cleanup();
           console.warn('[clabel-export-png] render failed',e);
           done(null);
         }
@@ -8092,6 +8173,10 @@ try{
     },0);
   }
 }catch(_){ }
+
+
+
+
 
 
 
