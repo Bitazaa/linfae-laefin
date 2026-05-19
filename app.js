@@ -2129,14 +2129,14 @@ var App={
       var css='@page{size:'+width+'mm '+height+'mm;margin:0;}'
         +'html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,Tahoma,sans-serif;}'
         +'*{box-sizing:border-box;}'
-        +'.ct-label{width:'+width+'mm;height:'+height+'mm;padding:'+Math.max(1.4,Math.min(2.2,margin*0.8)).toFixed(2)+'mm '+Math.max(1.6,Math.min(2.4,margin*0.9)).toFixed(2)+'mm;overflow:hidden;page-break-after:always;break-after:page;}'
+        +'.ct-label{width:'+width+'mm;height:'+height+'mm;padding:1.5mm 1.6mm;line-height:1.18;overflow:hidden;page-break-after:always;break-after:page;}'
         +'.ct-last{page-break-after:auto;break-after:auto;}'
-        +'.ct-h{font-size:'+Math.round(8.2*fontScale*10)/10+'px;font-weight:700;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-        +'.ct-row{font-size:'+Math.round(7.2*fontScale*10)/10+'px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-        +'.ct-menu{font-size:'+Math.round(9.2*fontScale*10)/10+'px;font-weight:800;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-        +'.ct-note{font-size:'+Math.round(7*fontScale*10)/10+'px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-        +'.ct-sep{border-top:1px solid #000;margin:.6mm 0;}'
-        +'.ct-cash{font-weight:700;}';
+        +'.ct-h{font-size:7.5px;font-weight:700;line-height:1.18;margin-bottom:.45mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+        +'.ct-row{font-size:7.2px;line-height:1.18;margin-bottom:.35mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+        +'.ct-menu{font-size:9px;font-weight:800;line-height:1.15;margin-top:.45mm;margin-bottom:.45mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+        +'.ct-note{font-size:7px;line-height:1.15;margin-bottom:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+        +'.ct-sep{border-top:.6px solid #000;margin:.65mm 0 .55mm;}'
+        +'.ct-cash{font-weight:700;}' +'.ct-footer{font-size:7.5px;line-height:1.15;margin-top:.45mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}';
       var body='';
       normalized.forEach(function(o,idx){
         o=o||{};
@@ -2197,7 +2197,7 @@ var App={
         }
 
         if(note)body+='<div class="ct-note">'+note+'</div>';
-        body+='<div class="ct-sep"></div><div class="ct-row '+(isCash?'ct-cash':'')+'">'+(isCash?'เก็บเงินปลายทาง • ':'รวม ')+App.u.esc(total)+'</div>';
+        body+='<div class="ct-sep"></div><div class="ct-footer '+(isCash?'ct-cash':'')+'">'+(isCash?'เก็บเงินปลายทาง • ':'รวม ')+App.u.esc(total)+'</div>';
         body+='</section>';
       });
       return '<!doctype html><html><head><meta charset="UTF-8"><title>Sticker</title><style>'+css+'</style></head><body>'+body+'</body></html>';
