@@ -1,3 +1,4 @@
+console.log('[APP BUILD]', 'ct221b-label-20260517-clabel3');
 const GasAPI = {
   async call(action,payload){
     if(!window.APP_CONFIG||!window.APP_CONFIG.API_BASE_URL||/PUT_APPS_SCRIPT_WEB_APP_URL_HERE/.test(String(window.APP_CONFIG.API_BASE_URL||''))){
@@ -8287,6 +8288,8 @@ try{
     },0);
   }
 }catch(_){ }
+
+
 
 
 
