@@ -1965,6 +1965,95 @@ var App={
       if(ori==='landscape')return h+'mm '+w+'mm';
       return w+'mm '+h+'mm';
     },
+    _formatStickerOptions:function(value){
+      if(value == null) return '';
+
+      var extract = function(x){
+        if(x == null) return '';
+        if(typeof x === 'string') return x.trim();
+        if(typeof x !== 'object') return String(x || '').trim();
+
+        var name =
+          x.label ||
+          x.name ||
+          x.title ||
+          x.option_name ||
+          x.optionName ||
+          x.value ||
+          x.text ||
+          x.choice_name ||
+          x.choiceName ||
+          '';
+
+        var qty = x.qty || x.quantity || '';
+
+        var out = String(name || '').trim();
+        if(!out && x.items && Array.isArray(x.items)){
+          out = x.items.map(extract).filter(Boolean).join(', ');
+        }
+
+        if(qty && out){
+          out = out + ' x' + qty;
+        }
+
+        return out;
+      };
+
+      var normalize = function(v){
+        if(v == null) return [];
+        if(Array.isArray(v)){
+          return v.map(extract).filter(Boolean);
+        }
+        if(typeof v === 'object'){
+          var one = extract(v);
+          return one ? [one] : [];
+        }
+
+        var s = String(v || '').trim();
+        if(!s) return [];
+
+        if((s.charAt(0)==='[' && s.charAt(s.length-1)===']') || (s.charAt(0)==='{' && s.charAt(s.length-1)==='}')){
+          try{
+            var parsed = JSON.parse(s);
+            return normalize(parsed);
+          }catch(e){}
+        }
+
+        return [s];
+      };
+
+      var arr = normalize(value)
+        .map(function(s){ return String(s || '').trim(); })
+        .filter(Boolean);
+
+      var seen = {};
+      arr = arr.filter(function(s){
+        var k = s.toLowerCase();
+        if(seen[k]) return false;
+        seen[k] = true;
+        return true;
+      });
+
+      return arr.join(', ');
+    },
+    _formatStickerOrderId:function(id){
+      var s=String(id||'').trim();
+      if(!s) return '-';
+      if(s.length<=18) return s;
+
+      var m=s.match(/([A-Z0-9]{5,10})$/i);
+      if(m&&m[1]){
+        return m[1].toUpperCase();
+      }
+
+      return s.slice(0,4)+'…'+s.slice(-8);
+    },
+    _truncateStickerText:function(text,max){
+      var s=String(text||'').trim();
+      max=parseInt(max,10)||24;
+      if(s.length<=max) return s;
+      return s.slice(0,Math.max(1,max-1))+'…';
+    },
     _normalizeStickerLabel:function(label){
       label=label||{};
       var order=label.order||label.rawOrder||label||{};
@@ -1993,7 +2082,8 @@ var App={
       var total=pick(order,['total','total_amount','grand_total','amount','net_total'],0);
       var status=pick(order,['status','order_status'],'');
       var itemName=item?pick(item,['name','menu_name','menuName','title','item_name','product_name'],''):'';
-      var options=item?pick(item,['options','selectedChoices','selected_choices','choices','toppings','option_text'],''):'';
+      var rawOptions=item?pick(item,['options','selectedChoices','selected_choices','choices','toppings','option_text'],''):'';
+      var options=App.admin._formatStickerOptions?App.admin._formatStickerOptions(rawOptions):String(rawOptions||'');
       var comment=item?pick(item,['item_comment','comment','note','remark','remarks'],''):'';
       var itemList=label.items||order.items||order.order_items||order.orderItems||[];
       return {
@@ -2029,49 +2119,60 @@ var App={
       var css='@page{size:'+width+'mm '+height+'mm;margin:0;}'
         +'html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,Tahoma,sans-serif;}'
         +'*{box-sizing:border-box;}'
-        +'.ct-label{width:'+width+'mm;height:'+height+'mm;padding:'+margin+'mm;overflow:hidden;page-break-after:always;break-after:page;}'
+        +'.ct-label{width:'+width+'mm;height:'+height+'mm;padding:'+Math.max(1.4,Math.min(2.2,margin*0.8)).toFixed(2)+'mm '+Math.max(1.6,Math.min(2.4,margin*0.9)).toFixed(2)+'mm;overflow:hidden;page-break-after:always;break-after:page;}'
         +'.ct-last{page-break-after:auto;break-after:auto;}'
-        +'.ct-h{font-size:'+Math.round(11*fontScale*10)/10+'px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-        +'.ct-row{font-size:'+Math.round(8.5*fontScale*10)/10+'px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-        +'.ct-menu{font-size:'+Math.round(10*fontScale*10)/10+'px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-        +'.ct-note{font-size:'+Math.round(8*fontScale*10)/10+'px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-        +'.ct-sep{border-top:1px solid #000;margin:1mm 0;}'
+        +'.ct-h{font-size:'+Math.round(8.2*fontScale*10)/10+'px;font-weight:700;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+        +'.ct-row{font-size:'+Math.round(7.2*fontScale*10)/10+'px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+        +'.ct-menu{font-size:'+Math.round(9.2*fontScale*10)/10+'px;font-weight:800;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+        +'.ct-note{font-size:'+Math.round(7*fontScale*10)/10+'px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+        +'.ct-sep{border-top:1px solid #000;margin:.6mm 0;}'
         +'.ct-cash{font-weight:700;}';
       var body='';
       normalized.forEach(function(o,idx){
         o=o||{};
         var cls='ct-label'+(idx===normalized.length-1?' ct-last':'');
-        var orderId=App.u.esc(String(o.orderId||'-'));
-        var customer=App.u.esc(String(o.customer||'-'));
-        var dept=App.u.esc(String(o.department||''));
-        var note=App.u.esc(String(o.note||''));
+        var orderCode=App.admin._formatStickerOrderId?App.admin._formatStickerOrderId(o.orderId):String(o.orderId||'-');
+        var orderId=App.u.esc(String(orderCode||'-'));
+        var customerText=App.admin._truncateStickerText?App.admin._truncateStickerText(o.customer,18):String(o.customer||'-');
+        var customer=App.u.esc(String(customerText||'-'));
+        var deptText=App.admin._truncateStickerText?App.admin._truncateStickerText(o.department,18):String(o.department||'');
+        var dept=App.u.esc(String(deptText||''));
+        var noteText=App.admin._truncateStickerText?App.admin._truncateStickerText(o.note,32):String(o.note||'');
+        var note=App.u.esc(String(noteText||''));
         var paymentRaw=String(o.paymentMethod||'').trim();
         var paymentKey=paymentRaw.toLowerCase();
         var isCash=(paymentKey==='cash'||paymentKey==='cod'||paymentKey.indexOf('เงินสด')>-1);
-        var payment=isCash?'เก็บเงินปลายทาง':(paymentRaw||'สแกนจ่าย');
+        var paymentShort=isCash?'COD':(App.admin._truncateStickerText?App.admin._truncateStickerText(paymentRaw||'scan',10):String(paymentRaw||'scan'));
         var status=App.u.esc(String(o.status||''));
         var totalRaw=parseFloat(o.total||0); if(!isFinite(totalRaw))totalRaw=0;
         var total='฿'+Math.round(totalRaw).toLocaleString('th-TH');
         var items=Array.isArray(o.items)?o.items:[];
-        var itemName=App.u.esc(String(o.itemName||''));
+        var itemNameText=App.admin._truncateStickerText?App.admin._truncateStickerText(o.itemName,28):String(o.itemName||'');
+        var itemName=App.u.esc(String(itemNameText||''));
         var itemQty=Math.max(1,parseInt(o.qty||1,10)||1);
-        var options=App.u.esc(String(o.options||'').replace(/[\x00-\x1F\x7F]/g,' ').trim());
-        var comment=App.u.esc(String(o.comment||'').replace(/[\x00-\x1F\x7F]/g,' ').trim());
+        var optionsText=String(o.options||'').replace(/[\x00-\x1F\x7F]/g,' ').trim();
+        if(App.admin._truncateStickerText)optionsText=App.admin._truncateStickerText(optionsText,36);
+        var options=App.u.esc(String(optionsText||''));
+        var commentText=String(o.comment||'').replace(/[\x00-\x1F\x7F]/g,' ').trim();
+        if(App.admin._truncateStickerText)commentText=App.admin._truncateStickerText(commentText,32);
+        var comment=App.u.esc(String(commentText||''));
         var copyTotal=Math.max(1,parseInt(o.copyTotal||1,10)||1);
         var copyIndex=Math.max(1,parseInt(o.copyIndex||1,10)||1);
+
         body+='<section class="'+cls+'">';
-        body+='<div class="ct-h">#'+orderId+' '+customer+'</div>';
-        if(dept)body+='<div class="ct-row">'+dept+'</div>';
-        body+='<div class="ct-row '+(isCash?'ct-cash':'')+'">'+App.u.esc(payment)+'</div>';
-        if(status)body+='<div class="ct-row">สถานะ: '+status+'</div>';
+        body+='<div class="ct-h">#'+orderId+' | '+App.u.esc(String(paymentShort||'-'))+'</div>';
+        var who=(customer&&customer!=='-'?customer:'')+(dept?(' / '+dept):'');
+        if(who)body+='<div class="ct-row">'+who+'</div>';
+        if(status && !isCash)body+='<div class="ct-note">สถานะ: '+status+'</div>';
         body+='<div class="ct-sep"></div>';
+
         if(String(o.type||'')==='item'){
           if(itemName)body+='<div class="ct-menu">'+itemName+(itemQty>1?(' x'+itemQty):'')+'</div>';
           if(copyTotal>1)body+='<div class="ct-note">ดวง '+copyIndex+'/'+copyTotal+'</div>';
           if(options)body+='<div class="ct-note">ตัวเลือก: '+options+'</div>';
           if(comment)body+='<div class="ct-note">หมายเหตุเมนู: '+comment+'</div>';
         }else if(items.length){
-          items.slice(0,4).forEach(function(it){
+          items.slice(0,3).forEach(function(it){
             var name=App.u.esc(String(it&&((it.menu_name||it.name||it.menuName||it.item_name)||'')||''));
             var qty=Math.max(1,parseInt(it&&(it.qty||it.quantity||it.count)||1,10)||1);
             var itOptions=App.u.esc(String(it&&(it.options||it.selectedChoices||it.selected_choices||it.choices||it.toppings)||'').replace(/[\x00-\x1F\x7F]/g,' ').trim());
@@ -2080,9 +2181,11 @@ var App={
             if(itOptions)body+='<div class="ct-note">ตัวเลือก: '+itOptions+'</div>';
             if(itComment)body+='<div class="ct-note">หมายเหตุเมนู: '+itComment+'</div>';
           });
+          if(items.length>3){ body+='<div class="ct-note">+ อีก '+(items.length-3)+' รายการ</div>'; }
         }
+
         if(note)body+='<div class="ct-note">'+note+'</div>';
-        body+='<div class="ct-sep"></div><div class="ct-row">รวม '+App.u.esc(total)+'</div>';
+        body+='<div class="ct-sep"></div><div class="ct-row '+(isCash?'ct-cash':'')+'">'+(isCash?'เก็บเงินปลายทาง • ':'รวม ')+App.u.esc(total)+'</div>';
         body+='</section>';
       });
       return '<!doctype html><html><head><meta charset="UTF-8"><title>Sticker</title><style>'+css+'</style></head><body>'+body+'</body></html>';
@@ -8173,11 +8276,4 @@ try{
     },0);
   }
 }catch(_){ }
-
-
-
-
-
-
-
 
