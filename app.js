@@ -169,7 +169,8 @@ var App={
       return String(n);
     },
     localHistory(){try{return JSON.parse(localStorage.getItem('foh')||'[]');}catch(_){return[];}},
-    saveHistory(orderId,data){try{var h=App.u.localHistory();var f=h.filter(function(x){return x.orderId!==orderId;});f.unshift({orderId:orderId,data:data,ts:Date.now()});localStorage.setItem('foh',JSON.stringify(f.slice(0,30)));}catch(_){}},
+    saveHistory(orderId,data){try{var h=App.u.localHistory();var f=h.filter(function(x){return x.orderId!==orderId;});f.unshift({orderId:orderId,
+        orderNo:orderNo,data:data,ts:Date.now()});localStorage.setItem('foh',JSON.stringify(f.slice(0,30)));}catch(_){}},
     btnAction:function(opts,fn){
       var dk=opts.debounceKey,dm=opts.debounceMs||1500;
       if(dk&&App.u.debounce(dk,dm))return;
@@ -2048,6 +2049,12 @@ var App={
 
       return s.slice(0,4)+'…'+s.slice(-8);
     },
+    _formatStickerOrderNo:function(no){
+      var s=String(no||'').trim();
+      if(!s) return '';
+      if(s.length>8) s=s.slice(0,8);
+      return 'No.'+s;
+    },
     _truncateStickerText:function(text,max){
       var s=String(text||'').trim();
       max=parseInt(max,10)||24;
@@ -2075,6 +2082,7 @@ var App={
       var qty=parseInt(qtyRaw,10);
       if(isNaN(qty)||qty<1)qty=1;
       var orderId=pick(order,['id','orderId','order_id','orderNo','order_no','code'],'');
+      var orderNo=pick(order,['order_no','orderNo','no','queue_no','queueNo','running_no','runningNo','number','order_number','orderNumber','display_no','displayNo'],'');
       var customer=pick(order,['customer_name','customerName','customer','name','buyer_name'],'');
       var department=pick(order,['department','dept','company','village','address','delivery_address'],'');
       var note=pick(order,['customer_note','note','remark','remarks','comment'],'');
@@ -2089,6 +2097,7 @@ var App={
       return {
         type:label.type||(item?'item':'order'),
         orderId:orderId,
+        orderNo:orderNo,
         customer:customer,
         department:department,
         note:note,
@@ -2160,10 +2169,12 @@ var App={
         var copyIndex=Math.max(1,parseInt(o.copyIndex||1,10)||1);
 
         body+='<section class="'+cls+'">';
-        body+='<div class="ct-h">#'+orderId+' | '+App.u.esc(String(paymentShort||'-'))+'</div>';
+        var orderNoText=App.admin._formatStickerOrderNo?App.admin._formatStickerOrderNo(o.orderNo):'';
+        var headLeft=(orderNoText?orderNoText+' ':'')+'#'+orderId;
+        body+='<div class="ct-h">'+App.u.esc(headLeft)+' | '+App.u.esc(String(paymentShort||'-'))+'</div>';
         var who=(customer&&customer!=='-'?customer:'')+(dept?(' / '+dept):'');
         if(who)body+='<div class="ct-row">'+who+'</div>';
-        if(status && !isCash)body+='<div class="ct-note">สถานะ: '+status+'</div>';
+        if(status && !isCash && String(o.type||'')!=='item' && String(status||'').toLowerCase()!=='cooking')body+='<div class="ct-note">สถานะ: '+status+'</div>';
         body+='<div class="ct-sep"></div>';
 
         if(String(o.type||'')==='item'){
@@ -8276,4 +8287,6 @@ try{
     },0);
   }
 }catch(_){ }
+
+
 
